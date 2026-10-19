@@ -55,7 +55,7 @@ flowchart TD
 ## 📂 Estrutura de Arquivos
 
 ```text
-plantabot/
+supervisorio-especialista/
 │
 ├── conhecimento/
 │   ├── planta.json           # Base de conhecimento estruturada da planta industrial (20 itens)
@@ -95,7 +95,13 @@ plantabot/
 
 ## ⚙️ Como Configurar e Executar
 
-### 1. Criar e ativar o ambiente virtual
+### 1. Clonar o repositório
+```bash
+git clone https://github.com/sidgubert/supervisorio-especialista.git
+cd supervisorio-especialista
+```
+
+### 2. Criar e ativar o ambiente virtual
 ```bash
 python -m venv venv
 # Windows
@@ -104,19 +110,19 @@ python -m venv venv
 source venv/bin/activate
 ```
 
-### 2. Instalar as dependências
+### 3. Instalar as dependências
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Iniciar o Ollama e baixar os modelos
+### 4. Iniciar o Ollama e baixar os modelos
 Certifique-se de que o Ollama está rodando em `http://localhost:11434` e que os modelos estão disponíveis:
 ```bash
 ollama pull qwen2.5:1.5b
 ollama pull qwen3:4b
 ```
 
-### 4. (Opcional) Iniciar o Servidor de Ferramentas MCP
+### 5. (Opcional) Iniciar o Servidor de Ferramentas MCP
 Em um terminal separado, inicie o servidor MCP local na porta `8000`:
 ```bash
 python ferramentas.py
