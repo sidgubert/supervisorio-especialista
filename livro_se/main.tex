@@ -1,0 +1,79 @@
+\documentclass[11pt,oneside,openany]{book}
+
+\usepackage[
+  paperwidth=16cm,
+  paperheight=23cm,
+  top=2.2cm,
+  bottom=2.2cm,
+  inner=2.4cm,
+  outer=2cm
+]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{tgpagella}
+\usepackage{tgheros}
+\usepackage[brazilian]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\graphicspath{{recursos/}}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{csquotes}
+\usepackage{etoolbox}
+\usepackage[
+  backend=biber,
+  style=abnt
+]{biblatex}
+\addbibresource{referencias.bib}
+\usepackage{hyperref}
+
+\makeatletter
+\patchcmd{\@makechapterhead}{\Huge}{\LARGE}{}{}
+\patchcmd{\@makeschapterhead}{\Huge}{\LARGE}{}{}
+\makeatother
+
+\definecolor{booknavy}{HTML}{142A3B}
+\definecolor{bookteal}{HTML}{2B7775}
+\definecolor{bookgold}{HTML}{D8B56D}
+\definecolor{bookpaper}{HTML}{F7F4EC}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue,
+  filecolor=blue,
+  menucolor=blue,
+  runcolor=blue,
+  pdftitle={Sistemas Especialistas Integrados a Grandes Modelos de Inteligência Artificial},
+  pdfsubject={Uma Coleção de Exemplos Práticos},
+  pdfcreator={LaTeX}
+}
+
+\setlength{\parindent}{1.2em}
+\setlength{\parskip}{0.25em}
+\setcounter{tocdepth}{1}
+
+\begin{document}
+\pagestyle{plain}
+
+\hypersetup{pageanchor=false}
+\input{capa.tex}
+
+\input{folha_rosto.tex}
+\frontmatter
+\hypersetup{pageanchor=true}
+\nopagecolor
+\input{ficha_catalografica.tex}
+\input{licenca.tex}
+\tableofcontents
+
+\mainmatter
+\footnotesize
+\input{capitulos/introducao.tex}
+\input{capitulos/capitulo_1/progbot.tex}
+\input{capitulos/capitulo_2/plantabot.tex}
+\normalsize
+\backmatter
+\nocite{*}
+\printbibliography[heading=bibintoc,title={Referências}]
+\end{document}

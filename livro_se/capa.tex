@@ -1,0 +1,49 @@
+\thispagestyle{empty}
+\pagecolor{bookpaper}
+\color{booknavy}
+\begin{tikzpicture}[remember picture,overlay]
+\begin{scope}[shift={(current page.south west)}]
+\foreach \x in {-18,-14,-10,-6,-2,2,6,10,14,18,22} {
+  \draw[bookteal,draw opacity=0.10,line width=0.45pt] (\x,0) -- ({\x+16},23);
+  \draw[bookgold,draw opacity=0.09,line width=0.45pt] (\x,23) -- ({\x+16},0);
+}
+\begin{scope}[draw=bookteal,draw opacity=0.14,line width=0.5pt]
+\draw (1.5,2) -- (4,3.5) -- (6.5,2.2);
+\draw (1.5,4.7) -- (4,3.5) -- (6.5,4.8);
+\draw (4,3.5) -- (4,5.8);
+\draw (6.5,2.2) -- (9,3.5) -- (11.5,2.1);
+\draw (6.5,4.8) -- (9,3.5) -- (11.5,4.9);
+\draw (9,3.5) -- (9,5.9);
+\draw (11.5,2.1) -- (14,3.4) -- (11.5,4.9);
+\foreach \x/\y/\c in {1.5/2/bookgold,1.5/4.7/bookteal,4/3.5/bookteal,4/5.8/bookgold,6.5/2.2/bookgold,6.5/4.8/bookteal,9/3.5/bookgold,9/5.9/bookteal,11.5/2.1/bookteal,11.5/4.9/bookgold,14/3.4/bookteal} {\fill[\c,fill opacity=0.24] (\x,\y) circle (0.09);}
+\draw (1.5,21) -- (4,19.5) -- (6.5,20.8);
+\draw (1.5,18.3) -- (4,19.5) -- (6.5,18.2);
+\draw (4,19.5) -- (4,17.2);
+\draw (6.5,20.8) -- (9,19.5) -- (11.5,20.9);
+\draw (6.5,18.2) -- (9,19.5) -- (11.5,18.1);
+\draw (9,19.5) -- (9,17.1);
+\draw (11.5,20.9) -- (14,19.6) -- (11.5,18.1);
+\foreach \x/\y/\c in {1.5/21/bookgold,1.5/18.3/bookteal,4/19.5/bookteal,4/17.2/bookgold,6.5/20.8/bookgold,6.5/18.2/bookteal,9/19.5/bookgold,9/17.1/bookteal,11.5/20.9/bookteal,11.5/18.1/bookgold,14/19.6/bookteal} {\fill[\c,fill opacity=0.24] (\x,\y) circle (0.09);}
+\end{scope}
+\end{scope}
+\end{tikzpicture}
+
+\vspace*{0.3cm}
+\begin{center}
+\includegraphics[height=3.1cm]{logo-transparente.png}\par
+\vspace{0.12cm}
+{\sffamily\bfseries\small Pós-Graduação em Desenvolvimento Web\par}
+{\sffamily\small Turma de Sistemas Especialistas para Web, 2026.2\par}
+\vspace{0.3cm}
+\end{center}
+\vspace*{0.1cm}
+\begin{center}
+% {\color{bookteal}\rule{0.22\textwidth}{2pt}}\par
+\vspace{0.35cm}
+{\sffamily\bfseries\fontsize{20}{26}\selectfont
+Sistemas Especialistas\\[0.2em]
+integrados a Grandes Modelos de Inteligência Artificial\par}
+\vspace{0.15cm}
+{\sffamily\large\color{bookteal}Uma Coleção de Exemplos Práticos\par}
+\end{center}
+\vspace{3\fill}
