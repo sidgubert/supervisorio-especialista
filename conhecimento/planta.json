@@ -1,0 +1,82 @@
+[
+  {
+    "pergunta": "O que é um Sistema Supervisório de Planta Industrial?",
+    "resposta": "É um sistema especialista de monitoramento e controle que acompanha leituras de sensores, gerencia alarmes de limites operacionais (setpoints) e apoia decisões de manutenção de equipamentos industriais."
+  },
+  {
+    "pergunta": "Quais são os equipamentos monitorados na planta industrial PlantaView?",
+    "resposta": "A planta possui 8 equipamentos instrumentados: Bomba 1 (id 1), Bomba 2 (id 2), Compressor 1 (id 3), Compressor 2 (id 4), Compressor 3 (id 5), Motor 1 (id 6), Motor 2 (id 7) e Caldeira 1 (id 8)."
+  },
+  {
+    "pergunta": "Quais grandezas físicas são monitoradas pelos sensores da planta?",
+    "resposta": "Os sensores monitoram três grandezas físicas principais em cada equipamento: temperatura (em °C), pressão (em bar) e vibração mecânica (em mm/s)."
+  },
+  {
+    "pergunta": "O que é um setpoint em automação e supervisão industrial?",
+    "resposta": "É o valor-limite operacional configurado para uma grandeza física (mínimo ou máximo) que, ao ser ultrapassado por uma leitura de sensor, dispara automaticamente um alarme."
+  },
+  {
+    "pergunta": "Quais são os limites operacionais (setpoints) das bombas hidráulicas da planta?",
+    "resposta": "Nas bombas (Bomba 1 e Bomba 2), a temperatura deve operar entre 20 °C e 60 °C, a pressão entre 1 bar e 5 bar, e a vibração entre 0 mm/s e 10 mm/s."
+  },
+  {
+    "pergunta": "Quais são os limites operacionais (setpoints) dos compressores da planta?",
+    "resposta": "Nos compressores (Compressor 1, 2 e 3), a temperatura deve operar entre 30 °C e 80 °C, a pressão entre 5 bar e 12 bar, e a vibração entre 0 mm/s e 15 mm/s."
+  },
+  {
+    "pergunta": "Quais são os limites operacionais (setpoints) dos motores elétricos da planta?",
+    "resposta": "Nos motores elétricos (Motor 1 e Motor 2), a temperatura deve operar entre 40 °C e 90 °C e a vibração mecânica entre 0 mm/s e 20 mm/s."
+  },
+  {
+    "pergunta": "Quais são os limites operacionais (setpoints) da Caldeira 1?",
+    "resposta": "Na Caldeira 1, a temperatura operacional situa-se entre 100 °C e 200 °C, a pressão entre 10 bar e 25 bar, e a vibração máxima tolerada é de 5 mm/s."
+  },
+  {
+    "pergunta": "Qual a diferença entre manutenção preventiva, preditiva e corretiva?",
+    "resposta": "A manutenção preventiva ocorre em intervalos planejados para evitar falhas; a preditiva baseia-se no monitoramento contínuo de indicadores (como vibração e termografia) para prever falhas; e a corretiva atua após a ocorrência de uma falha ou alarme crítico."
+  },
+  {
+    "pergunta": "Como são classificadas as severidades dos alarmes na planta industrial?",
+    "resposta": "Os alarmes são classificados em quatro níveis de severidade: baixa, media, alta e critica, conforme o grau de desvio do setpoint e o risco operacional ao equipamento."
+  },
+  {
+    "pergunta": "Quais são os estados possíveis do ciclo de vida de um alarme industrial?",
+    "resposta": "Um alarme passa por três estados: ativo (quando o desvio ocorre), reconhecido (quando o operador toma ciência do evento) e encerrado (quando a condição operacional volta à normalidade)."
+  },
+  {
+    "pergunta": "O que indica um aumento excessivo de vibração em bombas, motores ou compressores?",
+    "resposta": "Vibração excessiva geralmente indica desalinhamento de eixo, desbalanceamento de rotor, folga mecânica, cavitação em bombas ou desgaste de rolamentos, exigindo inspeção e manutenção corretiva ou preditiva."
+  },
+  {
+    "pergunta": "Qual é o diagnóstico quando a Caldeira 1 apresenta pressão acima de 25 bar?",
+    "resposta": "Pressão acima de 25 bar na Caldeira 1 caracteriza um alarme de severidade crítica por sobrepressão, frequentemente associado a falha ou vazamento na válvula de segurança e exigindo alívio imediato e manutenção urgente."
+  },
+  {
+    "pergunta": "Qual é o diagnóstico para superaquecimento acima de 80 °C no Compressor 3?",
+    "resposta": "Temperatura acima de 80 °C no Compressor 3 gera alarme crítico de superaquecimento, indicando falha no sistema de refrigeração ou degradação do óleo lubrificante."
+  },
+  {
+    "pergunta": "O que é cavitação em uma bomba hidráulica e como os sensores ajudam a detectá-la?",
+    "resposta": "Cavitação é a formação e implosão de bolhas de vapor na sucção da bomba, detectada na planta pela combinação de queda/oscilação de pressão e aumento anormal de vibração e temperatura."
+  },
+  {
+    "pergunta": "Quais são os status possíveis de uma Ordem de Serviço (OS) na manutenção?",
+    "resposta": "Uma Ordem de Serviço pode assumir os status: aberta (aguardando atendimento), em_andamento (em execução pelo técnico), concluida (intervenção finalizada) ou cancelada."
+  },
+  {
+    "pergunta": "Como são definidas as prioridades das Ordens de Serviço na planta?",
+    "resposta": "As Ordens de Serviço são priorizadas em quatro níveis: baixa, normal, alta e urgente, priorizando equipamentos com alarmes críticos ou risco à segurança operacional."
+  },
+  {
+    "pergunta": "Onde estão localizados os equipamentos da planta industrial PlantaView?",
+    "resposta": "As Bombas 1 e 2 ficam na Sala de Bombas; os Compressores 1, 2 e 3 ficam no setor de Utilidades; os Motores 1 e 2 ficam na Linha de Produção; e a Caldeira 1 fica na Casa de Caldeiras."
+  },
+  {
+    "pergunta": "Qual ação o operador deve tomar diante de um alarme crítico ativo?",
+    "resposta": "O operador deve reconhecer o alarme imediatamente no sistema supervisório, verificar a leitura atual dos sensores do equipamento afetado e acionar ou consultar a Ordem de Serviço corretiva de prioridade alta ou urgente."
+  },
+  {
+    "pergunta": "Qual a função da análise termográfica na manutenção preditiva dos motores e painéis?",
+    "resposta": "A termografia identifica pontos quentes anormais em conexões elétricas, rolamentos e enrolamentos antes que ocorra falha catastrófica, permitindo programar a intervenção sem parada inesperada."
+  }
+]

@@ -1,0 +1,18 @@
+[
+  {
+    "pergunta": "O que é um Sistema Supervisório de Planta Industrial?",
+    "resposta": "É um sistema especialista de monitoramento e controle que acompanha leituras de sensores, gerencia alarmes de limites operacionais (setpoints) e apoia decisões de manutenção de equipamentos industriais."
+  },
+  {
+    "pergunta": "Quais são os equipamentos monitorados na planta industrial PlantaView?",
+    "resposta": "A planta possui 8 equipamentos instrumentados: Bomba 1 (id 1), Bomba 2 (id 2), Compressor 1 (id 3), Compressor 2 (id 4), Compressor 3 (id 5), Motor 1 (id 6), Motor 2 (id 7) e Caldeira 1 (id 8)."
+  },
+  {
+    "pergunta": "Quais grandezas físicas são monitoradas pelos sensores da planta?",
+    "resposta": "Os sensores monitoram três grandezas físicas principais em cada equipamento: temperatura (em °C), pressão (em bar) e vibração mecânica (em mm/s)."
+  },
+  {
+    "pergunta": "O que é um setpoint em automação e supervisão industrial?",
+    "resposta": "É o valor-limite configurado para uma grandeza física (mínimo ou máximo) que, ao ser ultrapassado por uma leitura de sensor, dispara automaticamente um alarme."
+  }
+]

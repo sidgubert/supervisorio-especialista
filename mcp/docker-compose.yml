@@ -1,0 +1,43 @@
+services:
+  sensores-mcp:
+    build: .
+    container_name: sensores-mcp
+    hostname: sensores-mcp
+    restart: always
+    volumes:
+      - ./sensores:/mcp
+    command: python3 /mcp/ferramentas.py
+    ports:
+      - "8001:8000"
+    networks:
+      - rede-plantaview
+
+  alarmes-mcp:
+    build: .
+    container_name: alarmes-mcp
+    hostname: alarmes-mcp
+    restart: always
+    volumes:
+      - ./alarmes:/mcp
+    command: python3 /mcp/ferramentas.py
+    ports:
+      - "8002:8000"
+    networks:
+      - rede-plantaview
+
+  manutencao-mcp:
+    build: .
+    container_name: manutencao-mcp
+    hostname: manutencao-mcp
+    restart: always
+    volumes:
+      - ./manutencao:/mcp
+    command: python3 /mcp/ferramentas.py
+    ports:
+      - "8003:8000"
+    networks:
+      - rede-plantaview
+
+networks:
+  rede-plantaview:
+    external: true

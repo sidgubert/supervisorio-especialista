@@ -1,0 +1,103 @@
+services:
+  sensores:
+    build: .
+    container_name: sensores
+    hostname: sensores
+    restart: always
+    volumes:
+      - ./sensores:/servico
+    ports:
+      - "7001:5000"
+    command: python3 /servico/servico.py
+    depends_on:
+      - dados-sensores
+    networks:
+      - rede-plantaview
+
+  alarmes:
+    build: .
+    container_name: alarmes
+    hostname: alarmes
+    restart: always
+    volumes:
+      - ./alarmes:/servico
+    ports:
+      - "7002:5000"
+    command: python3 /servico/servico.py
+    depends_on:
+      - dados-alarmes
+    networks:
+      - rede-plantaview
+
+  manutencao:
+    build: .
+    container_name: manutencao
+    hostname: manutencao
+    restart: always
+    volumes:
+      - ./manutencao:/servico
+    ports:
+      - "7003:5000"
+    command: python3 /servico/servico.py
+    depends_on:
+      - dados-manutencao
+    networks:
+      - rede-plantaview
+
+  dados-sensores:
+    image: postgres:latest
+    container_name: dados-sensores
+    hostname: dados-sensores
+    restart: always
+    ports:
+      - "7004:5432"
+    volumes:
+      - ./sensores/init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_USER=admin
+      - POSTGRES_DB=plantaview_sensores
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    networks:
+      - rede-plantaview
+
+  dados-alarmes:
+    image: postgres:latest
+    container_name: dados-alarmes
+    hostname: dados-alarmes
+    restart: always
+    ports:
+      - "7005:5432"
+    volumes:
+      - ./alarmes/init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_USER=admin
+      - POSTGRES_DB=plantaview_alarmes
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    networks:
+      - rede-plantaview
+
+  dados-manutencao:
+    image: postgres:latest
+    container_name: dados-manutencao
+    hostname: dados-manutencao
+    restart: always
+    ports:
+      - "7006:5432"
+    volumes:
+      - ./manutencao/init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_USER=admin
+      - POSTGRES_DB=plantaview_manutencao
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    networks:
+      - rede-plantaview
+
+networks:
+  rede-plantaview:
+    external: true
