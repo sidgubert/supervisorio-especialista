@@ -241,5 +241,39 @@ def resumo_manutencao() -> str:
     return json.dumps(list(resumo.values()), ensure_ascii=False)
 
 
+@mcp.tool(
+    name="diagnosticar_equipamento",
+    title="Diagnóstico Integrado de Equipamento",
+    description="Consolida leituras atuais de sensores, desvios de setpoint, alarmes ativos e ordens de serviço abertas para diagnóstico especialista de um equipamento (id 1 a 8)"
+)
+def diagnosticar_equipamento(equipamento_id: str) -> str:
+    leituras = json.loads(leituras_por_equipamento(equipamento_id))
+    alarmes = json.loads(alarmes_por_equipamento(equipamento_id))
+    ordens = json.loads(ordens_por_equipamento(equipamento_id))
+
+    desvios = [
+        {
+            "grandeza": l["grandeza"],
+            "valor_lido": l["valor"],
+            "setpoint_max": l["setpoint_max"],
+            "unidade": l["unidade"]
+        }
+        for l in leituras
+        if l.get("setpoint_max") and l["valor"] > l["setpoint_max"]
+    ]
+    alarmes_ativos = [a for a in alarmes if a.get("status") == "ativo"]
+    ordens_pendentes = [o for o in ordens if o.get("status") in ("aberta", "em_andamento")]
+
+    diagnostico = {
+        "equipamento_id": int(equipamento_id),
+        "leituras_atuais": leituras,
+        "desvios_setpoint_detectados": desvios,
+        "alarmes_ativos": alarmes_ativos,
+        "ordens_servico_pendentes": ordens_pendentes,
+        "status_operacional": "CRITICO / ANORMAL" if (desvios or alarmes_ativos) else "NORMAL"
+    }
+    return json.dumps(diagnostico, ensure_ascii=False)
+
+
 if __name__ == "__main__":
     mcp.run(transport="streamable-http", host="0.0.0.0", streamable_http_path="/mcp")
