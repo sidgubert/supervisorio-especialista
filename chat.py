@@ -5,6 +5,9 @@ from contextlib import AsyncExitStack
 from pathlib import Path
 from urllib.parse import urlparse
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 from cache import buscar_cache, gravar_cache, iniciar_cache
 from llm import iniciar_ollama, limpar_pensamento, obter_resposta, obter_resposta_com_ferramentas
 
