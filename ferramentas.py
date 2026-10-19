@@ -1,7 +1,22 @@
 import json
 import os
+import sys
 import urllib.request as requisicao
-from mcp.server.mcpserver import MCPServer
+from pathlib import Path
+
+
+def _importar_mcp_server():
+    caminho_atual = str(Path(__file__).resolve().parent)
+    caminhos_originais = list(sys.path)
+    try:
+        sys.path = [p for p in sys.path if p not in ("", ".", caminho_atual)]
+        from mcp.server.mcpserver import MCPServer
+        return MCPServer
+    finally:
+        sys.path = caminhos_originais
+
+
+MCPServer = _importar_mcp_server()
 
 NOME = "supervisao_planta_industrial"
 mcp = MCPServer(

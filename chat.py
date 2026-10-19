@@ -1,16 +1,31 @@
 import asyncio
 import json
+import sys
 from contextlib import AsyncExitStack
 from pathlib import Path
 from urllib.parse import urlparse
-
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
 
 from cache import buscar_cache, gravar_cache, iniciar_cache
 from llm import iniciar_ollama, limpar_pensamento, obter_resposta, obter_resposta_com_ferramentas
 
 DIRETORIO_BASE = Path(__file__).resolve().parent
+
+
+def _importar_mcp_cliente():
+    caminho_atual = str(DIRETORIO_BASE)
+    caminhos_originais = list(sys.path)
+    try:
+        sys.path = [p for p in sys.path if p not in ("", ".", caminho_atual)]
+        from mcp import ClientSession
+        from mcp.client.streamable_http import streamable_http_client
+        return ClientSession, streamable_http_client
+    except ImportError:
+        return None, None
+    finally:
+        sys.path = caminhos_originais
+
+
+ClientSession, streamable_http_client = _importar_mcp_cliente()
 
 NOME_ESPECIALISTA = "PlantaBot"
 BASE_CONHECIMENTO = DIRETORIO_BASE / "conhecimento" / "planta.json"
@@ -37,15 +52,14 @@ def iniciar_persona_assistente(conhecimento: list[tuple[str, str]]) -> list[dict
     )
 
     conteudo_sistema = (
-        f"Você é um sistema especialista em supervisão, diagnóstico operacional e manutenção de planta industrial, chamado {NOME_ESPECIALISTA}.\n"
+        f"Você é um especialista, perito, em supervisão, diagnóstico operacional e manutenção de planta industrial, chamado {NOME_ESPECIALISTA}.\n"
         "Regras:\n"
-        "1. Se o usuário fizer uma saudação, você deve falar na sua resposta que você é um software assistente virtual (PlantaBot), "
-        "não é um humano, mas que pode ajudar com diagnóstico de sensores, alarmes e manutenção dos equipamentos da planta industrial.\n"
+        "1. Se o usuário fizer uma saudação, você deve falar na sua resposta que você é um software, "
+        "não é um humano, mas que pode ajudar o usuário com diagnóstico de sensores, alarmes e manutenção dos equipamentos da planta industrial.\n"
         "2. Se o usuário te perguntar algo que não esteja relacionado com supervisão industrial, sensores, alarmes, equipamentos ou manutenção da planta, "
-        f"você deve dizer exatamente '{RESPOSTA_RECUSA}'.\n"
+        f"você deve dizer '{RESPOSTA_RECUSA}'.\n"
         "3. Equipamentos monitorados na planta: 1=Bomba 1, 2=Bomba 2, 3=Compressor 1, 4=Compressor 2, 5=Compressor 3, 6=Motor 1, 7=Motor 2, 8=Caldeira 1.\n"
-        "4. Quando precisar consultar leituras atuais, alarmes ou ordens de serviço de equipamentos específicos, utilize as ferramentas MCP disponíveis.\n"
-        "5. Caso o usuário fale ou pergunte algo parecido com os itens abaixo, utilize a respectiva resposta técnica:\n"
+        "4. Caso o usuário fale ou pergunte algo parecido com os itens abaixo, utilize a respectiva resposta:\n"
         f"{diretrizes_conhecimento}"
     )
 
@@ -86,6 +100,9 @@ async def conectar_ferramentas(contexto: AsyncExitStack) -> tuple[dict[str, dict
     mapa_ferramentas = {}
     ferramentas_openai = []
 
+    if ClientSession is None or streamable_http_client is None:
+        return mapa_ferramentas, ferramentas_openai
+
     urls_ativas = {}
     if await servidor_disponivel(URL_FERRAMENTAS):
         urls_ativas["supervisao_planta_industrial"] = URL_FERRAMENTAS
@@ -95,7 +112,7 @@ async def conectar_ferramentas(contexto: AsyncExitStack) -> tuple[dict[str, dict
                 urls_ativas[nome_srv] = url_srv
 
     if not urls_ativas:
-        print(f"aviso: servidor MCP não detectado em {URL_FERRAMENTAS} (nem nas portas 8001-8003). Para habilitar ferramentas em tempo real, execute 'python ferramentas.py'.")
+        print(f"servidor de ferramentas MCP indisponível em {URL_FERRAMENTAS}. Para consultas MCP em tempo real, execute 'python ferramentas.py'.")
         return mapa_ferramentas, ferramentas_openai
 
     for nome_servico, url in urls_ativas.items():
