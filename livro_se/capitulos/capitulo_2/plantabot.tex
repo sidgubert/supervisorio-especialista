@@ -4,46 +4,50 @@
 Sid Gubert
 \end{flushright}
 
-Ambientes industriais modernos dependem de sistemas supervisórios para monitorar continuamente ativos rotativos e térmicos submetidos a regimes severos de operação. Em uma planta industrial instrumentada — composta no mini-mundo deste projeto por oito equipamentos críticos: \texttt{Bomba 1}, \texttt{Bomba 2}, \texttt{Compressor 1}, \texttt{Compressor 2}, \texttt{Compressor 3}, \texttt{Motor 1}, \texttt{Motor 2} e \texttt{Caldeira 1} —, a interpretação isolada de uma leitura de temperatura, pressão ou vibração mecânica raramente é suficiente para determinar a causa-raiz de uma falha iminente \cite{mobley2002introduction}. Um engenheiro de manutenção ou operador experiente precisa cruzar simultaneamente se a grandeza física ultrapassou seu limite operacional (\textit{setpoint}), qual o nível de severidade dos alarmes ativos e se já existem Ordens de Serviço (OS) abertas ou em andamento antes de prescrever uma intervenção preventiva, preditiva ou corretiva \cite{iso10816}.
+PlantaBot é um Assistente Virtual Especialista em supervisão e manutenção de uma planta industrial de pequeno porte. O objetivo dele é ajudar operadores e técnicos de manutenção a interpretar leituras de sensores, alarmes e ordens de serviço (OS) dos equipamentos.
 
-Para emular esse raciocínio diagnóstico no contexto da Web, foi concebido o \textbf{PlantaBot}, o assistente especialista conversacional integrado ao ecossistema de monitoramento industrial \textit{PlantaView}. Diferentemente de assistentes puramente textuais que operam sobre um único script monolítico, o PlantaBot foi projetado sobre uma arquitetura distribuída orientada a microsserviços e bancos de dados relacionais dedicados, combinando a capacidade analítica e prescritiva de Grandes Modelos de Linguagem (LLMs) com a precisão factual de bases de conhecimento normativas e telemetria estruturada \cite{yang2025comprehensive,garridomerchan2026gofai}.
+Em uma planta instrumentada, uma leitura isolada de temperatura, pressão ou vibração raramente basta para decidir o que fazer \cite{mobley2002introduction}. O profissional experiente verifica se a grandeza ultrapassou o seu limite operacional (\textit{setpoint}), qual é a severidade dos alarmes ativos e se já existe uma OS aberta para o equipamento. O PlantaBot busca emular esse raciocínio combinando um Grande Modelo de Linguagem (LLM) com uma base de conhecimento do domínio e com consultas aos dados da planta \cite{yang2025comprehensive,garridomerchan2026gofai}.
 
-O diferencial central da solução reside na sua operação em \textbf{modo resiliente dual}: o núcleo especialista é capaz tanto de orquestrar consultas em tempo real a múltiplos servidores MCP conectados a microsserviços REST/PostgreSQL containerizados (monitorados visualmente por um \textit{dashboard} web independente) quanto de operar de maneira autônoma e determinística sobre motores de inferência locais (\textit{Ollama}), garantindo disponibilidade contínua mesmo em cenários de isolamento de rede no chão de fábrica.
-
-\section{Arquitetura do PlantaBot}
-
-A Figura \ref{fig:arquitetura-plantabot} representa a organização estrutural do núcleo cognitivo do PlantaBot. A interação com o operador ou engenheiro de manutenção inicia-se na camada de conversação (\path{chat.py} e \path{mcp/chat_google.py}), responsável por mediar o diálogo em linguagem natural e acionar o ciclo de decisão do Sistema Especialista. Antes de mobilizar o modelo generativo para inferência completa, o sistema submete a consulta à \textbf{Memória de Trabalho (Contexto)}, onde o módulo de \textbf{Cache Semântico} (\path{cache.py}) avalia a proximidade vetorial da pergunta em relação a diagnósticos já consolidados na base vetorial \textit{ChromaDB} (adotando distância de cosseno $\le 0{,}20$). Quando ocorre correspondência semântica (\textit{cache hit}), o parecer técnico é retornado imediatamente sem custo computacional de nova inferência; caso contrário (\textit{cache miss}), a consulta segue para o motor neural acompanhada do histórico contextual da sessão.
-
-No interior do motor de \textbf{Inferência (Rede Neural)}, o modelo de linguagem — executado localmente via \textit{Ollama} (\texttt{qwen2.5:1.5b} / \texttt{qwen3:4b}) em \path{llm.py} ou via API em nuvem (\texttt{gemini-3.6-flash}) no cliente multi-serviço — é condicionado pelo módulo de \textbf{Persona(s)} e pela \textbf{Base de Conhecimento (Planta)} (\path{conhecimento/planta.json}). Essa base codifica as faixas operacionais (\textit{setpoints}) de cada classe de equipamento (como limites de $200\,^\circ\text{C}$ e $25\,\text{bar}$ para a \texttt{Caldeira 1}, ou $80\,^\circ\text{C}$ e $12\,\text{bar}$ para compressores), regras de correlação de falhas (cavitação hidráulica, sobrepressão de vapor, superaquecimento térmico e desalinhamento mecânico) e restrições estritas de domínio (\textit{guardrails}), que impedem o especialista de responder a solicitações alheias à engenharia de manutenção industrial.
+O mini-mundo adotado, ilustrado na Figura \ref{fig:minimundo-plantabot}, contém oito equipamentos distribuídos em quatro setores: duas bombas, três compressores, dois motores e uma caldeira. Cada equipamento possui faixas de operação para as grandezas monitoradas, e três serviços registram, respectivamente, as leituras dos sensores, os alarmes e as OS de manutenção.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{capitulos/capitulo_2/arquitetura.png}
+\includegraphics[width=0.85\textwidth]{capitulos/capitulo_2/minimundo.png}
+\caption{Mini-mundo da planta industrial}
+\label{fig:minimundo-plantabot}
+\end{figure}
+
+\section{Arquitetura do PlantaBot}
+
+A Figura \ref{fig:arquitetura-plantabot} exibe a arquitetura do PlantaBot. O usuário conversa com o especialista por meio de um chat. Cada pergunta é enviada a um LLM executado localmente pelo \textit{Ollama}, configurado por um \textit{prompt} para assumir a persona de um perito em supervisão industrial. O mesmo \textit{prompt} carrega a base de conhecimento, composta por vinte pares de pergunta e resposta sobre os equipamentos, seus \textit{setpoints}, a classificação dos alarmes e os tipos de manutenção, e instrui o modelo a recusar perguntas alheias ao domínio.
+
+A memória de trabalho combina dois componentes: (i) um cache semântico, que recupera, por similaridade, a resposta dada a uma pergunta anterior de mesmo sentido, e (ii) o histórico das últimas mensagens trocadas na sessão, que acompanha cada nova pergunta enviada ao LLM.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.9\textwidth]{capitulos/capitulo_2/arquitetura.png}
 \caption{Arquitetura do PlantaBot}
 \label{fig:arquitetura-plantabot}
 \end{figure}
 
 \section{Ferramentas MCP}
 
-Para que o raciocínio do especialista reflita o estado real da planta industrial em vez de depender apenas de conhecimento estático, o PlantaBot adota uma arquitetura de integração via \textit{Model Context Protocol} (MCP) \cite{mcp2026architecture} desacoplada em camadas de serviço, cujo mini-mundo industrial e topologia de microsserviços são ilustrados na Figura \ref{fig:minimundo-plantabot}. No ecossistema \textit{PlantaView}, os oito ativos distribuídos nos quatro setores operacionais (Sala de Bombas, Utilidades, Linha de Produção e Casa de Caldeiras) têm seus dados persistidos por três microsserviços RESTful independentes construídos em \textit{Flask}, cada um com sua própria instância \textit{PostgreSQL} inicializada com \textit{seeds} determinísticos (\path{servicos/docker-compose.yml}): o serviço de \textbf{Sensores} (\texttt{:7001} / banco \texttt{:7004}), o serviço de \textbf{Alarmes} (\texttt{:7002} / banco \texttt{:7005}) e o serviço de \textbf{Manutenção} (\texttt{:7003} / banco \texttt{:7006}), os quais também alimentam o painel supervisório web (\path{servicos/dashboard.html}).
+A base de conhecimento descreve como a planta deve operar, mas não informa o seu estado atual. Para isso, o PlantaBot utiliza ferramentas disponibilizadas por meio do \textit{Model Context Protocol} (MCP), que padroniza a descoberta e a invocação de capacidades externas por aplicações com LLM \cite{mcp2026architecture}. Ao todo, dez ferramentas são oferecidas ao modelo:
 
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=1.0\textwidth]{capitulos/capitulo_2/minimundo.png}
-\caption{Mini-mundo da planta industrial e ecossistema distribuído de serviços MCP/REST}
-\label{fig:minimundo-plantabot}
-\end{figure}
-
-Acima dessa camada de dados, a exposição de capacidades ao LLM ocorre por meio de servidores \texttt{FastMCP} comunicando-se via transporte \texttt{streamable-http}. No modo distribuído (\path{mcp/docker-compose.yml} e \path{mcp/chat_google.py}), três servidores MCP dedicados (\texttt{sensores} em \texttt{:8001/mcp}, \texttt{alarmes} em \texttt{:8002/mcp} e \texttt{manutencao} em \texttt{:8003/mcp}) são descobertos dinamicamente via \texttt{AsyncExitStack} e \texttt{ClientSession}. Complementarmente, o servidor MCP unificado (\path{ferramentas.py}, na porta \texttt{:8000/mcp}) implementa um mecanismo de \textbf{modo resiliente dual}: ao ser invocado pelo especialista, cada ferramenta requisita prioritariamente os microsserviços REST nas portas \texttt{7001} a \texttt{7003} e, caso algum contêiner esteja indisponível, aciona instantaneamente um \textit{fallback} local com o espelho determinístico das tabelas operacionais. Ao todo, dez ferramentas são disponibilizadas ao motor de inferência:
 \begin{itemize}
-    \item \textbf{Telemetria de Sensores (\texttt{:8001}):} \path{leituras_por_equipamento}, \path{leituras_por_grandeza} e \path{ultima_leitura}, que inspecionam medições de temperatura ($^\circ\text{C}$), pressão ($\text{bar}$) e vibração ($\text{mm/s}$) confrontadas aos respectivos \textit{setpoints} mínimo e máximo;
-    \item \textbf{Gestão de Alarmes (\texttt{:8002}):} \path{alarmes_por_equipamento}, \path{alarmes_por_severidade} e \path{resumo_alarmes}, que rastreiam ocorrências de severidade \texttt{baixa}, \texttt{media}, \texttt{alta} ou \texttt{critica} e seus estados (\texttt{ativo}, \texttt{reconhecido} ou \texttt{encerrado});
-    \item \textbf{Ordens de Manutenção (\texttt{:8003}) e Diagnóstico Consolidado (\texttt{:8000}):} \path{ordens_por_equipamento}, \path{ordens_por_status}, \path{resumo_manutencao} e a ferramenta composta \path{diagnosticar_equipamento}, que sintetiza em uma única chamada desvios de \textit{setpoint}, alarmes abertos e OS pendentes (preventivas, preditivas ou corretivas) de qualquer um dos oito ativos.
+    \item \textbf{Sensores:} \path{leituras_por_equipamento}, \path{leituras_por_grandeza} e \path{ultima_leitura} retornam as medições e os respectivos \textit{setpoints};
+    \item \textbf{Alarmes:} \path{alarmes_por_equipamento}, \path{alarmes_por_severidade} e \path{resumo_alarmes} retornam os alarmes, sua severidade e seu estado;
+    \item \textbf{Manutenção:} \path{ordens_por_equipamento}, \path{ordens_por_status} e \path{resumo_manutencao} retornam as OS e seu andamento;
+    \item \textbf{Diagnóstico:} \path{diagnosticar_equipamento} reúne, em uma única chamada, os desvios de \textit{setpoint}, os alarmes ativos e as OS pendentes de um equipamento.
 \end{itemize}
+
+As ferramentas consultam os três serviços da planta, implementados como serviços REST com bancos de dados próprios. Quando eles estão indisponíveis, as ferramentas devolvem um conjunto fixo de dados simulados, identificado no campo \texttt{fonte} do resultado, e o chat avisa o usuário de que os dados não são reais.
 
 \section{Desenvolvimento e Avaliação}
 
-A implementação em Python foi estruturada para garantir modularidade entre a vetorização semântica, a orquestração MCP e a inferência neural. No módulo \path{cache.py}, as perguntas dos operadores são normalizadas, identificadas por resumo criptográfico SHA-256 e convertidas em \textit{embeddings} densos pelo modelo multilíngue \texttt{paraphrase-multilingual-MiniLM-L12-v2} (\textit{sentence-transformers}), sendo persistidas em disco pelo \textit{ChromaDB}. Por questão de segurança operacional, respostas oriundas de bloqueio de escopo (\textit{guardrails}) são filtradas e nunca armazenadas no cache. A Figura \ref{fig:funcionamento-plantabot} demonstra o ciclo completo de operação: diante de uma solicitação de diagnóstico, o assistente aciona a ferramenta MCP correspondente para inspecionar os indicadores da planta, formula o laudo técnico via LLM e, em consultas subsequentes semanticamente equivalentes, recupera a resposta diretamente do cache vetorial.
+O PlantaBot foi desenvolvido em Python. A biblioteca \textit{openai} envia as mensagens ao \textit{Ollama}, que executa o modelo \texttt{qwen3:4b}. A \textit{sentence-transformers} converte cada pergunta em um \textit{embedding}, e o \textit{chromadb} armazena esses vetores; uma resposta é recuperada do cache quando a distância de cosseno entre a nova pergunta e uma pergunta anterior é de até $0{,}20$. O \texttt{FastMCP} disponibiliza as ferramentas. Respostas produzidas com o uso de ferramentas não são gravadas no cache, porque refletem o estado da planta em um instante, e as recusas também não.
+
+A Figura \ref{fig:funcionamento-plantabot} mostra uma sessão de uso. Nela aparecem a saudação, o acionamento de uma ferramenta MCP (com os serviços desligados e, portanto, com dados simulados), uma resposta gerada pelo LLM, a mesma resposta recuperada do cache para uma pergunta reformulada e a recusa de uma pergunta fora do domínio.
 
 \begin{figure}[htbp]
 \centering
@@ -52,7 +56,9 @@ A implementação em Python foi estruturada para garantir modularidade entre a v
 \label{fig:funcionamento-plantabot}
 \end{figure}
 
-A verificação da confiabilidade diagnóstica do Sistema Especialista foi conduzida em duas frentes automatizadas: uma suíte de testes unitários (\path{teste.py}) e um protocolo de auditoria por IA baseado na técnica \textit{LLM-as-a-Judge} \cite{azevedo2026julgamento}, implementado em \path{julgamento.py}. No experimento de avaliação, utilizam-se dois modelos distintos no \textit{Ollama}: o modelo especialista (\texttt{qwen2.5:1.5b}, com temperatura $0{,}1$) e um modelo juiz independente de maior porte (\texttt{qwen3:4b}, com filtragem automática de blocos de raciocínio \texttt{<think>}). O protocolo executa dois estágios rigorosos: (i) \textbf{validação de sensibilidade a alucinações} (\path{avaliar_alucinacoes}), na qual respostas deliberadamente incorretas (como inverter limites térmicos ou atribuir diagnósticos falsos) são submetidas ao juiz para comprovar que todas recebem o veredito \texttt{NÃO ATENDE}; e (ii) \textbf{julgamento do assistente} (\path{julgar_assistente}), no qual as respostas reais geradas pelo PlantaBot são confrontadas com o gabarito de engenharia de manutenção, obtendo $100\%$ de aprovação (\texttt{ATENDE}), conforme ilustrado na Figura \ref{fig:julgamento-plantabot}.
+Para testar a qualidade das respostas, aplica-se a técnica \textit{LLM-as-a-Judge} \cite{azevedo2026julgamento}. Um segundo modelo, \texttt{mistral}, atua como julgador e recebe o gabarito de quatro perguntas da base de conhecimento. O julgamento ocorre em duas etapas. Na primeira, três respostas deliberadamente erradas são apresentadas ao julgador, para verificar se ele as reprova. Na segunda, as respostas do PlantaBot às quatro perguntas são julgadas. Na execução registrada na Figura \ref{fig:julgamento-plantabot}, as três respostas erradas foram reprovadas e as quatro respostas do assistente foram aprovadas. Trata-se de uma amostra pequena, que serve como verificação básica e não como medida de acurácia.
+
+Os testes também orientaram a escolha do modelo. Em sessões de conversa com um modelo menor, \texttt{qwen2.5:1.5b}, o assistente respondeu a perguntas fora do domínio e nem sempre acionou as ferramentas, o que motivou a adoção do \texttt{qwen3:4b}.
 
 \begin{figure}[htbp]
 \centering
@@ -63,4 +69,4 @@ A verificação da confiabilidade diagnóstica do Sistema Especialista foi condu
 
 \section{Reproducibilidade e Reuso}
 
-O código-fonte completo do PlantaBot e do ecossistema supervisório \textit{PlantaView} — abrangendo os microsserviços REST/PostgreSQL, o painel supervisório web, os servidores MCP containerizados e unificado, a base de conhecimento industrial e os scripts de avaliação automatizada — pode ser consultado e (re)usado livremente através do link de acesso ao \href{https://zenodo.org/records/supervisorio-especialista?preview_file=supervisorio-especialista.zip}{repositório do projeto} (também disponível em \url{https://github.com/sidgubert/supervisorio-especialista}). Também se encontra disponibilizado um vídeo demonstrativo \href{https://zenodo.org/records/supervisorio-especialista/preview/plantabot.mp4}{neste link}.
+O código-fonte do PlantaBot pode ser consultado e (re)usado livremente através do link de acesso ao \href{https://zenodo.org/records/supervisorio-especialista?preview_file=supervisorio-especialista.zip}{repositório do projeto} (também disponível em \url{https://github.com/sidgubert/supervisorio-especialista}). Também se encontra disponibilizado um vídeo demonstrativo \href{https://zenodo.org/records/supervisorio-especialista/preview/plantabot.mp4}{neste link}.
