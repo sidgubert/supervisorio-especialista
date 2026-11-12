@@ -47,10 +47,10 @@ Atendendo integralmente aos requisitos do documento `IFBA-Especialistas-Avaliaca
 | Módulo Básico Esperado | Arquivo Principal | Responsabilidade Técnica |
 |------------------------|-------------------|--------------------------|
 | **Chat Especialista** | `chat.py` | Interface conversacional com o especialista (`PlantaBot`), orquestrando cache semântico, *guardrails* de escopo, chamadas MCP e inferência LLM. |
-| **Motor de Inferência (LLM)** | `llm.py` | Integração com grandes modelos de linguagem executados localmente via **Ollama** (`qwen2.5:1.5b` e `qwen3:4b`) através de API compatível com OpenAI. |
+| **Motor de Inferência (LLM)** | `llm.py` | Integração com grandes modelos de linguagem executados localmente via **Ollama** (`qwen3:4b` e `mistral:latest`) através de API compatível com OpenAI. |
 | **Cache Semântico** | `cache.py` | Vetorização de perguntas com `SentenceTransformer` (`paraphrase-multilingual-MiniLM-L12-v2`) e armazenamento/busca por similaridade de cosseno ($\le 0.20$) no `ChromaDB`. |
-| **Ferramentas MCP** | `ferramentas.py` e `mcp/` | Servidores *Model Context Protocol* (`streamable-http`) que expõem ferramentas de inspeção de sensores, alarmes, ordens de serviço e diagnóstico integrado de equipamentos. |
-| **Julgamento (LLM-as-a-Judge)** | `julgamento.py` | Script automatizado que utiliza um modelo julgador (`qwen3:4b`) para validar respostas do assistente (`ATENDE`) e rejeitar alucinações (`NÃO ATENDE`). |
+| **Ferramentas MCP** | `ferramentas.py` e `servidores_mcp/` | Servidores *Model Context Protocol* (`streamable-http`) que expõem ferramentas de inspeção de sensores, alarmes, ordens de serviço e diagnóstico integrado de equipamentos. |
+| **Julgamento (LLM-as-a-Judge)** | `julgamento.py` | Script automatizado que utiliza um modelo julgador (`mistral:latest`) para validar respostas do assistente (`ATENDE`) e rejeitar alucinações (`NÃO ATENDE`). |
 | **Testes Automatizados** | `teste.py` | Suíte `unittest` para verificação de precisão conceitual e bloqueio de perguntas fora do domínio (*guardrails*). |
 
 ---
@@ -63,7 +63,7 @@ Atendendo integralmente aos requisitos do documento `IFBA-Especialistas-Avaliaca
 | IEEE 1016-2009                         | Standard for Software Design Descriptions                                 |
 | Repositório `progbot` / `progbot.ferramentas` | Arquitetura de referência exemplificada pelo Prof. Luis Paulo em aula |
 | Model Context Protocol (MCP) Spec      | Protocolo aberto de comunicação entre LLMs e ferramentas externas         |
-| Ollama + Qwen2.5 / Qwen3               | Servidor local de LLMs e modelos de inferência e julgamento               |
+| Ollama + Qwen3 / Mistral                 | Servidor local de LLMs e modelos de inferência e julgamento               |
 | SentenceTransformers & ChromaDB        | Biblioteca de embeddings multilíngues e banco de dados vetorial           |
 
 ---
@@ -95,7 +95,7 @@ flowchart TD
     CosineCheck -- Não (Miss) --> LLMCall[llm.py: Motor de Inferência Ollama]
     LLMCall <-->|2. Tool Call MCP / HTTP| MCPServer[ferramentas.py: Servidor MCP :8000]
     MCPServer <-->|REST / SQL ou Dados Determinísticos| Servicos[(Microsserviços: Sensores :7001, Alarmes :7002, Manutenção :7003)]
-    LLMCall -->|3. Persona + Conhecimento + Contexto MCP| OllamaLocal[(Ollama: qwen2.5:1.5b / qwen3:4b)]
+    LLMCall -->|3. Persona + Conhecimento + Contexto MCP| OllamaLocal[(Ollama: qwen3:4b / mistral:latest)]
     OllamaLocal --> RespostaLLM["🤖 Resposta [resposta do llm]"]
     RespostaLLM -->|Se não for recusa| GravarCache[Salva no ChromaDB]
     GravarCache --> Usuario
@@ -105,7 +105,7 @@ flowchart TD
 
 | Componente                     | Porta Host | Protocolo               | Papel na Arquitetura                              |
 |--------------------------------|------------|-------------------------|---------------------------------------------------|
-| **Ollama Server**              | `11434`    | HTTP (OpenAI API `/v1`) | Motor de inferência LLM (`qwen2.5:1.5b`, `qwen3:4b`) |
+| **Ollama Server**              | `11434`    | HTTP (OpenAI API `/v1`) | Motor de inferência LLM (`qwen3:4b`, `mistral:latest`) |
 | **Servidor MCP Unificado**     | `8000`     | HTTP (`streamable-http`)| Servidor MCP principal (`ferramentas.py`)         |
 | **MCP Sensores (Docker)**      | `8001`     | HTTP (`streamable-http`)| Servidor MCP dedicado ao serviço de sensores      |
 | **MCP Alarmes (Docker)**       | `8002`     | HTTP (`streamable-http`)| Servidor MCP dedicado ao serviço de alarmes       |
@@ -154,8 +154,8 @@ A base de conhecimento estruturada reside em `conhecimento/planta.json` (e o sub
 
 O módulo `llm.py` encapsula a comunicação com o servidor local **Ollama** (`http://localhost:11434/v1/`) utilizando a biblioteca `openai`:
 
-- **Modelo Assistente (`chat.py` / `julgamento.py`):** `qwen2.5:1.5b` (temperatura `0.1` para respostas determinísticas e técnicas).
-- **Modelo Julgador (`julgamento.py`):** `qwen3:4b` (com filtro `limpar_pensamento()` para remoção de tags `<think>...</think>`).
+- **Modelo Assistente (`chat.py` / `julgamento.py`):** `mistral:latest` (temperatura `0.1`; o filtro `limpar_pensamento()` remove as tags `<think>...</think>`).
+- **Modelo Julgador (`julgamento.py`):** `mistral:latest` (modelo distinto do assistente, para que o julgamento seja independente).
 - **Suporte a Tool Calling (`obter_resposta_com_ferramentas`):** Repassa a lista de ferramentas MCP convertidas para o schema de funções da API OpenAI/Ollama, permitindo que o modelo decida autonomamente quando invocar uma ferramenta antes de formular o parecer final.
 
 ---
@@ -169,13 +169,13 @@ O módulo `cache.py` evita reprocessamento no LLM para perguntas semanticamente 
 3. **Busca por Similaridade (`buscar_cache`):** Consulta a coleção `plantabot_cache` no `chromadb.PersistentClient` configurada com espaço métrico de cosseno (`{"hnsw:space": "cosine"}`).
 4. **Critério de Hit (`LIMIAR_DISTANCIA_CACHE = 0.20`):**
    - Se `distancia <= 0.20`, retorna a resposta armazenada com a tag `[recuperada do cache]`.
-   - Se `distancia > 0.20` (*Cache Miss*), aciona o motor de inferência LLM/MCP, exibe `[resposta do llm]` e persiste o par `(pergunta, resposta)` via `gravar_cache` (exceto quando a resposta é uma recusa de *guardrail*).
+   - Se `distancia > 0.20` (*Cache Miss*), aciona o motor de inferência LLM/MCP, exibe `[resposta do llm]` e persiste o par `(pergunta, resposta)` via `gravar_cache` (exceto quando a resposta é uma recusa de *guardrail* ou foi obtida com ferramentas MCP).
 
 ---
 
 ## 9. Viewpoint MCP (Model Context Protocol)
 
-O módulo `ferramentas.py` implementa um servidor MCP (`MCPServer("supervisao_planta_industrial")`) exposto via transporte `streamable-http` em `http://0.0.0.0:8000/mcp` (além dos servidores containerizados em `mcp/sensores`, `mcp/alarmes` e `mcp/manutencao` nas portas `8001` a `8003`).
+O módulo `ferramentas.py` implementa um servidor MCP (`MCPServer("supervisao_planta_industrial")`) exposto via transporte `streamable-http` em `http://127.0.0.1:8000/mcp` (além dos servidores containerizados em `servidores_mcp/sensores`, `servidores_mcp/alarmes` e `servidores_mcp/manutencao` nas portas `8001` a `8003`).
 
 ### Ferramentas Expostas pelo Servidor MCP
 
@@ -200,9 +200,9 @@ O módulo `ferramentas.py` implementa um servidor MCP (`MCPServer("supervisao_pl
 
 O script `julgamento.py` implementa a avaliação automatizada do Sistema Especialista utilizando a técnica **LLM-as-a-Judge**:
 
-1. **Persona do Julgador (`iniciar_persona_julgamento`):** Parametriza o modelo `qwen3:4b` como perito avaliador munido do gabarito de referência, instruído a responder exclusivamente `'ATENDE'` ou `'NÃO ATENDE'`.
-2. **Detecção de Alucinações (`avaliar_alucinacoes`):** Submete respostas deliberadamente falsas/alucinadas para perguntas do domínio industrial e valida via `assert("NÃO ATENDE" in julgamento)` que o juiz rejeita alucinações.
-3. **Avaliação do Assistente (`julgar_assistente`):** Submete as perguntas de avaliação ao assistente **PlantaBot** (`qwen2.5:1.5b`), coleta as respostas geradas e as envia ao julgador (`qwen3:4b`), validando via `assert("NÃO ATENDE" not in julgamento)` a precisão técnica do sistema especialista.
+1. **Persona do Julgador (`iniciar_persona_julgamento`):** Parametriza o modelo `mistral:latest` como perito avaliador munido do gabarito de referência, instruído a responder exclusivamente `'ATENDE'` ou `'NÃO ATENDE'`.
+2. **Detecção de Alucinações (`avaliar_alucinacoes`):** Submete respostas deliberadamente falsas/alucinadas para perguntas do domínio industrial e confere que o julgador responde `NÃO ATENDE` a cada uma delas.
+3. **Avaliação do Assistente (`julgar_assistente`):** Submete as perguntas de avaliação ao assistente **PlantaBot** (`qwen3:4b`), coleta as respostas geradas e as envia ao julgador (`mistral:latest`), exigindo o veredito `ATENDE` para cada resposta. Ao final é impresso o placar das duas etapas.
 
 ---
 
@@ -222,7 +222,7 @@ supervisorio-especialista/
 │   ├── planta.json           # Base de conhecimento estruturada do especialista (20 itens)
 │   └── planta_menor.json     # Base enxuta para execução rápida do LLM-as-a-Judge
 ├── cache/                    # Persistência local do banco vetorial ChromaDB
-├── mcp/                      # Servidores MCP containerizados (Docker)
+├── servidores_mcp/           # Servidores MCP containerizados (Docker)
 ├── servicos/                 # Microsserviços REST Flask + PostgreSQL + Dashboard Web
 ├── cache.py                  # Módulo de Cache Semântico (SentenceTransformer + ChromaDB)
 ├── ferramentas.py            # Servidor MCP de ferramentas da planta industrial
@@ -244,8 +244,8 @@ supervisorio-especialista/
 pip install -r requirements.txt
 
 # 2. Garantir modelos no Ollama (rodando em http://localhost:11434)
-ollama pull qwen2.5:1.5b
 ollama pull qwen3:4b
+ollama pull mistral:latest
 
 # 3. (Opcional) Iniciar o servidor MCP em um terminal separado
 python ferramentas.py
@@ -269,7 +269,7 @@ python chat.py
 | **Seção 2 (Escopo)** | Concretização de um Sistema Especialista em formato de chatbot com mini-mundo próprio que emule o raciocínio de um especialista. | Mini-mundo de planta industrial (**PlantaView**) onde o **PlantaBot** diagnostica desvios de sensores, alarmes e ordens de serviço. |
 | **Item 2 e 3 (Originalidade)** | Não reutilizar o tema de POO (*ProgBot*) e possuir tema inédito. | Domínio de Supervisão, Diagnóstico Operacional e Manutenção de Planta Industrial. |
 | **Item 5(a) (Chat)** | Disponibilizar um chat para interação com o especialista. | Implementado em `chat.py` com persona especialista, *guardrails* de escopo e integração MCP/Cache. |
-| **Item 5(b) e 8 (LLM)** | Motor de inferência baseado em grande modelo de IA. | Implementado em `llm.py` consumindo modelos locais via **Ollama** (`qwen2.5:1.5b` e `qwen3:4b`). |
+| **Item 5(b) e 8 (LLM)** | Motor de inferência baseado em grande modelo de IA. | Implementado em `llm.py` consumindo modelos locais via **Ollama** (`qwen3:4b` e `mistral:latest`). |
 | **Item 5(c) e 8 (Cache Semântico)** | Cache semântico para registro e retorno de respostas para perguntas anteriormente processadas. | Implementado em `cache.py` com `SentenceTransformer` (`paraphrase-multilingual-MiniLM-L12-v2`) e `ChromaDB` (cosseno $\le 0.20$). |
 | **Item 5(d) e 8 (LLM-as-a-Judge)** | Script adicional para avaliação do sistema especialista utilizando *LLM-as-a-Judge*. | Implementado em `julgamento.py` avaliando alucinações (`NÃO ATENDE`) e respostas do especialista (`ATENDE`). |
 | **Item 8 (Ferramentas MCP)** | Presença clara de ferramentas MCP no código e na demonstração. | Implementado em `ferramentas.py` (servidor FastMCP/MCPServer) e integrado ao fluxo de conversa em `chat.py`. |
