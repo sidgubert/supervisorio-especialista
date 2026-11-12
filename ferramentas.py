@@ -1,22 +1,9 @@
 import json
 import os
-import sys
+import unicodedata
 import urllib.request as requisicao
-from pathlib import Path
 
-
-def _importar_mcp_server():
-    caminho_atual = str(Path(__file__).resolve().parent)
-    caminhos_originais = list(sys.path)
-    try:
-        sys.path = [p for p in sys.path if p not in ("", ".", caminho_atual)]
-        from mcp.server.mcpserver import MCPServer
-        return MCPServer
-    finally:
-        sys.path = caminhos_originais
-
-
-MCPServer = _importar_mcp_server()
+from mcp.server.mcpserver import MCPServer
 
 NOME = "supervisao_planta_industrial"
 mcp = MCPServer(
@@ -78,6 +65,18 @@ ORDENS_DETERMINISTICAS = [
 ]
 
 
+EQUIPAMENTOS = {
+    1: "Bomba 1", 2: "Bomba 2", 3: "Compressor 1", 4: "Compressor 2",
+    5: "Compressor 3", 6: "Motor 1", 7: "Motor 2", 8: "Caldeira 1"
+}
+GRANDEZAS = ("temperatura", "pressao", "vibracao")
+SEVERIDADES = ("baixa", "media", "alta", "critica")
+STATUS_ORDENS = ("aberta", "em_andamento", "concluida", "cancelada")
+
+FONTE_SERVICOS = "microsserviços da planta (tempo real)"
+FONTE_CONTINGENCIA = "contingência: microsserviços indisponíveis, dados simulados de 2026-09-20"
+
+
 def acessar(url):
     sucesso, conteudo, erro = False, None, None
     try:
@@ -90,36 +89,141 @@ def acessar(url):
     return sucesso, conteudo, erro
 
 
+def consultar(url, contingencia):
+    """Consulta o microsserviço; se ele não responder, usa os dados de contingência.
+
+    Retorna (dados, fonte), para que a origem do dado nunca fique oculta.
+    """
+    sucesso, conteudo, _ = acessar(url)
+    if sucesso:
+        try:
+            return json.loads(conteudo), FONTE_SERVICOS
+        except json.JSONDecodeError:
+            pass
+    return contingencia(), FONTE_CONTINGENCIA
+
+
+def normalizar(texto):
+    sem_acentos = unicodedata.normalize("NFKD", str(texto))
+    sem_acentos = "".join(c for c in sem_acentos if not unicodedata.combining(c))
+    return " ".join(sem_acentos.lower().split())
+
+
+def resolver_equipamento(valor):
+    """Aceita o id (8, "8", "8.0") ou o nome ("Caldeira 1") e devolve o id, ou None."""
+    texto = normalizar(valor)
+    try:
+        eq_id = int(float(texto))
+        return eq_id if eq_id in EQUIPAMENTOS else None
+    except ValueError:
+        pass
+    for eq_id, nome in EQUIPAMENTOS.items():
+        if normalizar(nome) in texto:
+            return eq_id
+    return None
+
+
+def resolver_opcao(valor, opcoes):
+    texto = normalizar(valor).replace(" ", "_")
+    return texto if texto in opcoes else None
+
+
+def responder(dados, fonte):
+    return json.dumps({"fonte": fonte, "dados": dados}, ensure_ascii=False)
+
+
+def responder_erro(mensagem):
+    return json.dumps({"erro": mensagem}, ensure_ascii=False)
+
+
+ERRO_EQUIPAMENTO = "equipamento desconhecido; informe o id de 1 a 8: " + ", ".join(
+    f"{eq_id}={nome}" for eq_id, nome in EQUIPAMENTOS.items()
+)
+
+
+def obter_leituras(eq_id):
+    return consultar(
+        f"{URL_SENSORES}/leituras/equipamento/{eq_id}",
+        lambda: [item for item in LEITURAS_DETERMINISTICAS if item["equipamento_id"] == eq_id]
+    )
+
+
+def obter_alarmes(eq_id):
+    return consultar(
+        f"{URL_ALARMES}/alarmes/equipamento/{eq_id}",
+        lambda: [item for item in ALARMES_DETERMINISTICOS if item["equipamento_id"] == eq_id]
+    )
+
+
+def obter_ordens(eq_id):
+    return consultar(
+        f"{URL_MANUTENCAO}/ordens/equipamento/{eq_id}",
+        lambda: [item for item in ORDENS_DETERMINISTICAS if item["equipamento_id"] == eq_id]
+    )
+
+
+def detectar_desvios(leituras):
+    """Compara a leitura mais recente de cada grandeza com os setpoints mínimo e máximo."""
+    desvios, grandezas_vistas = [], set()
+
+    for leitura in sorted(leituras, key=lambda l: str(l.get("registrado_em", "")), reverse=True):
+        grandeza = leitura.get("grandeza")
+        if grandeza in grandezas_vistas:
+            continue
+        grandezas_vistas.add(grandeza)
+
+        try:
+            valor = float(leitura["valor"])
+        except (KeyError, TypeError, ValueError):
+            continue
+
+        for limite, tipo in (("setpoint_max", "acima do máximo"), ("setpoint_min", "abaixo do mínimo")):
+            if leitura.get(limite) is None:
+                continue
+            setpoint = float(leitura[limite])
+            if (limite == "setpoint_max" and valor > setpoint) or (limite == "setpoint_min" and valor < setpoint):
+                desvios.append({
+                    "grandeza": grandeza,
+                    "valor_lido": valor,
+                    "desvio": tipo,
+                    "setpoint": setpoint,
+                    "unidade": leitura.get("unidade")
+                })
+
+    return desvios
+
+
 @mcp.tool(
     name="leituras_por_equipamento",
     title="Leituras por Equipamento",
     description="Retorna as leituras de sensores de um equipamento identificado pelo seu id (1=Bomba 1, 2=Bomba 2, 3=Compressor 1, 4=Compressor 2, 5=Compressor 3, 6=Motor 1, 7=Motor 2, 8=Caldeira 1)"
 )
-def leituras_por_equipamento(equipamento_id: str) -> str:
-    sucesso, conteudo, _ = acessar(f"{URL_SENSORES}/leituras/equipamento/{equipamento_id}")
-    if sucesso:
-        return conteudo
-    eq_id = int(equipamento_id)
-    dados = [item for item in LEITURAS_DETERMINISTICAS if item["equipamento_id"] == eq_id]
-    return json.dumps(dados, ensure_ascii=False)
+def leituras_por_equipamento(equipamento_id: str | int) -> str:
+    eq_id = resolver_equipamento(equipamento_id)
+    if eq_id is None:
+        return responder_erro(ERRO_EQUIPAMENTO)
+    return responder(*obter_leituras(eq_id))
 
 
 @mcp.tool(
     name="leituras_por_grandeza",
     title="Leituras por Grandeza",
-    description="Retorna leituras de um equipamento filtradas por grandeza (temperatura, pressao ou vibracao)"
+    description="Retorna leituras de um equipamento (id 1 a 8) filtradas por grandeza (temperatura, pressao ou vibracao)"
 )
-def leituras_por_grandeza(equipamento_id: str, grandeza: str) -> str:
-    sucesso, conteudo, _ = acessar(f"{URL_SENSORES}/leituras/equipamento/{equipamento_id}/grandeza/{grandeza}")
-    if sucesso:
-        return conteudo
-    eq_id = int(equipamento_id)
-    g = grandeza.lower().strip()
-    dados = [
-        item for item in LEITURAS_DETERMINISTICAS
-        if item["equipamento_id"] == eq_id and item["grandeza"] == g
-    ]
-    return json.dumps(dados, ensure_ascii=False)
+def leituras_por_grandeza(equipamento_id: str | int, grandeza: str) -> str:
+    eq_id = resolver_equipamento(equipamento_id)
+    if eq_id is None:
+        return responder_erro(ERRO_EQUIPAMENTO)
+    g = resolver_opcao(grandeza, GRANDEZAS)
+    if g is None:
+        return responder_erro(f"grandeza desconhecida; use uma destas: {', '.join(GRANDEZAS)}")
+    return responder(*consultar(
+        f"{URL_SENSORES}/leituras/equipamento/{eq_id}/grandeza/{g}",
+        lambda: [
+            item for item in LEITURAS_DETERMINISTICAS
+            if item["equipamento_id"] == eq_id and item["grandeza"] == g
+        ]
+    ))
 
 
 @mcp.tool(
@@ -128,10 +232,7 @@ def leituras_por_grandeza(equipamento_id: str, grandeza: str) -> str:
     description="Retorna a última leitura de cada sensor de todos os equipamentos da planta"
 )
 def ultima_leitura() -> str:
-    sucesso, conteudo, _ = acessar(f"{URL_SENSORES}/leituras/ultima")
-    if sucesso:
-        return conteudo
-    return json.dumps(LEITURAS_DETERMINISTICAS, ensure_ascii=False)
+    return responder(*consultar(f"{URL_SENSORES}/leituras/ultima", lambda: LEITURAS_DETERMINISTICAS))
 
 
 @mcp.tool(
@@ -139,13 +240,11 @@ def ultima_leitura() -> str:
     title="Alarmes por Equipamento",
     description="Retorna os alarmes de um equipamento identificado pelo seu id (1=Bomba 1, 2=Bomba 2, 3=Compressor 1, 4=Compressor 2, 5=Compressor 3, 6=Motor 1, 7=Motor 2, 8=Caldeira 1)"
 )
-def alarmes_por_equipamento(equipamento_id: str) -> str:
-    sucesso, conteudo, _ = acessar(f"{URL_ALARMES}/alarmes/equipamento/{equipamento_id}")
-    if sucesso:
-        return conteudo
-    eq_id = int(equipamento_id)
-    dados = [item for item in ALARMES_DETERMINISTICOS if item["equipamento_id"] == eq_id]
-    return json.dumps(dados, ensure_ascii=False)
+def alarmes_por_equipamento(equipamento_id: str | int) -> str:
+    eq_id = resolver_equipamento(equipamento_id)
+    if eq_id is None:
+        return responder_erro(ERRO_EQUIPAMENTO)
+    return responder(*obter_alarmes(eq_id))
 
 
 @mcp.tool(
@@ -154,12 +253,24 @@ def alarmes_por_equipamento(equipamento_id: str) -> str:
     description="Retorna alarmes filtrados por severidade (baixa, media, alta ou critica)"
 )
 def alarmes_por_severidade(severidade: str) -> str:
-    sucesso, conteudo, _ = acessar(f"{URL_ALARMES}/alarmes/severidade/{severidade}")
-    if sucesso:
-        return conteudo
-    sev = severidade.lower().strip()
-    dados = [item for item in ALARMES_DETERMINISTICOS if item["severidade"] == sev]
-    return json.dumps(dados, ensure_ascii=False)
+    sev = resolver_opcao(severidade, SEVERIDADES)
+    if sev is None:
+        return responder_erro(f"severidade desconhecida; use uma destas: {', '.join(SEVERIDADES)}")
+    return responder(*consultar(
+        f"{URL_ALARMES}/alarmes/severidade/{sev}",
+        lambda: [item for item in ALARMES_DETERMINISTICOS if item["severidade"] == sev]
+    ))
+
+
+def resumir_alarmes_contingencia():
+    contagem = {}
+    for alarme in ALARMES_DETERMINISTICOS:
+        chave = (alarme["equipamento_id"], alarme["equipamento_nome"], alarme["severidade"])
+        contagem[chave] = contagem.get(chave, 0) + 1
+    return [
+        {"equipamento_id": k[0], "equipamento_nome": k[1], "severidade": k[2], "total_alarmes": v}
+        for k, v in contagem.items()
+    ]
 
 
 @mcp.tool(
@@ -168,18 +279,7 @@ def alarmes_por_severidade(severidade: str) -> str:
     description="Retorna um resumo com a contagem de alarmes por equipamento e severidade"
 )
 def resumo_alarmes() -> str:
-    sucesso, conteudo, _ = acessar(f"{URL_ALARMES}/alarmes/resumo")
-    if sucesso:
-        return conteudo
-    contagem = {}
-    for alarme in ALARMES_DETERMINISTICOS:
-        chave = (alarme["equipamento_id"], alarme["equipamento_nome"], alarme["severidade"])
-        contagem[chave] = contagem.get(chave, 0) + 1
-    resumo = [
-        {"equipamento_id": k[0], "equipamento_nome": k[1], "severidade": k[2], "total_alarmes": v}
-        for k, v in contagem.items()
-    ]
-    return json.dumps(resumo, ensure_ascii=False)
+    return responder(*consultar(f"{URL_ALARMES}/alarmes/resumo", resumir_alarmes_contingencia))
 
 
 @mcp.tool(
@@ -187,13 +287,11 @@ def resumo_alarmes() -> str:
     title="Ordens de Serviço por Equipamento",
     description="Retorna as ordens de serviço de manutenção de um equipamento identificado pelo seu id (1 a 8)"
 )
-def ordens_por_equipamento(equipamento_id: str) -> str:
-    sucesso, conteudo, _ = acessar(f"{URL_MANUTENCAO}/ordens/equipamento/{equipamento_id}")
-    if sucesso:
-        return conteudo
-    eq_id = int(equipamento_id)
-    dados = [item for item in ORDENS_DETERMINISTICAS if item["equipamento_id"] == eq_id]
-    return json.dumps(dados, ensure_ascii=False)
+def ordens_por_equipamento(equipamento_id: str | int) -> str:
+    eq_id = resolver_equipamento(equipamento_id)
+    if eq_id is None:
+        return responder_erro(ERRO_EQUIPAMENTO)
+    return responder(*obter_ordens(eq_id))
 
 
 @mcp.tool(
@@ -202,23 +300,16 @@ def ordens_por_equipamento(equipamento_id: str) -> str:
     description="Retorna ordens de serviço filtradas por status (aberta, em_andamento, concluida ou cancelada)"
 )
 def ordens_por_status(status: str) -> str:
-    sucesso, conteudo, _ = acessar(f"{URL_MANUTENCAO}/ordens/status/{status}")
-    if sucesso:
-        return conteudo
-    st = status.lower().strip()
-    dados = [item for item in ORDENS_DETERMINISTICAS if item["status"] == st]
-    return json.dumps(dados, ensure_ascii=False)
+    st = resolver_opcao(status, STATUS_ORDENS)
+    if st is None:
+        return responder_erro(f"status desconhecido; use um destes: {', '.join(STATUS_ORDENS)}")
+    return responder(*consultar(
+        f"{URL_MANUTENCAO}/ordens/status/{st}",
+        lambda: [item for item in ORDENS_DETERMINISTICAS if item["status"] == st]
+    ))
 
 
-@mcp.tool(
-    name="resumo_manutencao",
-    title="Resumo de Manutenção",
-    description="Retorna um resumo de manutenção por equipamento com totais de ordens abertas, em andamento e concluídas"
-)
-def resumo_manutencao() -> str:
-    sucesso, conteudo, _ = acessar(f"{URL_MANUTENCAO}/ordens/resumo")
-    if sucesso:
-        return conteudo
+def resumir_manutencao_contingencia():
     resumo = {}
     for ordem in ORDENS_DETERMINISTICAS:
         eq_id = ordem["equipamento_id"]
@@ -238,42 +329,49 @@ def resumo_manutencao() -> str:
             resumo[eq_id]["em_andamento"] += 1
         elif ordem["status"] == "concluida":
             resumo[eq_id]["concluidas"] += 1
-    return json.dumps(list(resumo.values()), ensure_ascii=False)
+    return list(resumo.values())
+
+
+@mcp.tool(
+    name="resumo_manutencao",
+    title="Resumo de Manutenção",
+    description="Retorna um resumo de manutenção por equipamento com totais de ordens abertas, em andamento e concluídas"
+)
+def resumo_manutencao() -> str:
+    return responder(*consultar(f"{URL_MANUTENCAO}/ordens/resumo", resumir_manutencao_contingencia))
 
 
 @mcp.tool(
     name="diagnosticar_equipamento",
     title="Diagnóstico Integrado de Equipamento",
-    description="Consolida leituras atuais de sensores, desvios de setpoint, alarmes ativos e ordens de serviço abertas para diagnóstico especialista de um equipamento (id 1 a 8)"
+    description="Consolida leituras atuais de sensores, desvios de setpoint, alarmes ativos e ordens de serviço pendentes para o diagnóstico de um equipamento (id 1 a 8)"
 )
-def diagnosticar_equipamento(equipamento_id: str) -> str:
-    leituras = json.loads(leituras_por_equipamento(equipamento_id))
-    alarmes = json.loads(alarmes_por_equipamento(equipamento_id))
-    ordens = json.loads(ordens_por_equipamento(equipamento_id))
+def diagnosticar_equipamento(equipamento_id: str | int) -> str:
+    eq_id = resolver_equipamento(equipamento_id)
+    if eq_id is None:
+        return responder_erro(ERRO_EQUIPAMENTO)
 
-    desvios = [
-        {
-            "grandeza": l["grandeza"],
-            "valor_lido": l["valor"],
-            "setpoint_max": l["setpoint_max"],
-            "unidade": l["unidade"]
-        }
-        for l in leituras
-        if l.get("setpoint_max") and l["valor"] > l["setpoint_max"]
-    ]
+    leituras, fonte_leituras = obter_leituras(eq_id)
+    alarmes, fonte_alarmes = obter_alarmes(eq_id)
+    ordens, fonte_ordens = obter_ordens(eq_id)
+
+    desvios = detectar_desvios(leituras)
     alarmes_ativos = [a for a in alarmes if a.get("status") == "ativo"]
     ordens_pendentes = [o for o in ordens if o.get("status") in ("aberta", "em_andamento")]
 
+    fontes = {fonte_leituras, fonte_alarmes, fonte_ordens}
     diagnostico = {
-        "equipamento_id": int(equipamento_id),
-        "leituras_atuais": leituras,
+        "fonte": FONTE_CONTINGENCIA if FONTE_CONTINGENCIA in fontes else FONTE_SERVICOS,
+        "equipamento_id": eq_id,
+        "equipamento_nome": EQUIPAMENTOS[eq_id],
+        "status_operacional": "ANORMAL" if (desvios or alarmes_ativos) else "NORMAL",
         "desvios_setpoint_detectados": desvios,
         "alarmes_ativos": alarmes_ativos,
         "ordens_servico_pendentes": ordens_pendentes,
-        "status_operacional": "CRITICO / ANORMAL" if (desvios or alarmes_ativos) else "NORMAL"
+        "leituras_atuais": leituras
     }
     return json.dumps(diagnostico, ensure_ascii=False)
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="0.0.0.0", streamable_http_path="/mcp")
+    mcp.run(transport="streamable-http", host="127.0.0.1", streamable_http_path="/mcp")

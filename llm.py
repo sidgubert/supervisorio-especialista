@@ -12,10 +12,13 @@ def iniciar_ollama():
             base_url = URL_OLLAMA,
             api_key = "ollama"
         )
+        # criar o cliente não abre conexão: a listagem de modelos confirma
+        # que o servidor do Ollama está realmente no ar
+        ollama.models.list()
 
         iniciado = True
     except Exception as e:
-        print(f"ocorreu um problema iniciando o llm: {e}")
+        print(f"não foi possível conectar ao Ollama em {URL_OLLAMA}: {e}")
 
     return iniciado, ollama
 
@@ -83,7 +86,7 @@ def executar():
         }
     ]
 
-    sucesso, resposta = obter_resposta(ollama, mensagens, modelo = "qwen2.5:1.5b")
+    sucesso, resposta = obter_resposta(ollama, mensagens)
     if sucesso:
         print(f"resposta do llm: {resposta}")
     else:
