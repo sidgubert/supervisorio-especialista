@@ -1,16 +1,23 @@
 import os
 import sys
 
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+
 from chat import DIRETORIO_BASE, MODELO, carregar_conhecimento, iniciar_persona_assistente
 from llm import iniciar_ollama, obter_resposta
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-# o assistente julgado é o mesmo modelo usado no chat; o julgador pode ser
-# trocado sem editar o código: defina PLANTABOT_MODELO_JULGADOR
+# a chave da API do Gemini (GOOGLE_API_KEY) fica no arquivo .env da raiz do projeto
+load_dotenv(DIRETORIO_BASE / ".env")
+
+# o assistente julgado é o mesmo modelo local usado no chat (Ollama); o julgador
+# é o Gemini, do Google, e pode ser trocado sem editar o código: defina PLANTABOT_MODELO_JULGADOR
 MODELO_ASSISTENTE = MODELO
-MODELO_JULGAMENTO = os.environ.get("PLANTABOT_MODELO_JULGADOR", "mistral:latest")
+MODELO_JULGAMENTO = os.environ.get("PLANTABOT_MODELO_JULGADOR", "gemini-3.6-flash")
 BASE_CONHECIMENTO_JULGAMENTO = DIRETORIO_BASE / "conhecimento" / "planta_menor.json"
 
 VEREDITO_APROVADO = "ATENDE"
@@ -34,15 +41,33 @@ ALUCINACOES = [
 ]
 
 
+def iniciar_gemini():
+    iniciado, gemini = False, None
+
+    try:
+        gemini = genai.Client(api_key = os.environ["GOOGLE_API_KEY"])
+        # criar o cliente não valida nada: consultar o modelo confirma que a
+        # chave é aceita e que o nome do modelo julgador existe
+        gemini.models.get(model = MODELO_JULGAMENTO)
+
+        iniciado = True
+    except KeyError:
+        print("GOOGLE_API_KEY não definida: copie .env.example para .env e informe a sua chave")
+    except Exception as e:
+        print(f"não foi possível conectar ao Gemini com o modelo {MODELO_JULGAMENTO}: {e}")
+
+    return iniciado, gemini
+
+
 def iniciar_persona_julgamento(conhecimento):
-    # um único bloco de sistema: modelos pequenos seguem melhor as regras
-    # quando elas não estão espalhadas em várias mensagens
+    # no formato de requisição do Gemini, as regras do julgador não fazem parte
+    # da conversa: elas são enviadas à parte, como instrução de sistema
     gabarito = "\n".join(
         f"- Caso a pergunta seja '{mensagem}' ou algo parecido, você deve verificar se a resposta é '{resposta}' ou algo parecido"
         for mensagem, resposta in conhecimento
     )
 
-    conteudo_sistema = (
+    return (
         "Você é um especialista, perito, em supervisão operacional, instrumentação e manutenção de planta industrial.\n"
         "Sua função é avaliar se uma determinada resposta responde adequadamente uma pergunta sobre supervisão, "
         "diagnóstico de sensores, alarmes e manutenção da planta industrial.\n"
@@ -54,7 +79,31 @@ def iniciar_persona_julgamento(conhecimento):
         f"e '{VEREDITO_REPROVADO}' se a resposta não responde a pergunta. Não é necessário explicar o seu julgamento."
     )
 
-    return [{"role": "system", "content": conteudo_sistema}]
+
+def obter_julgamento(gemini, persona_julgador, pergunta, resposta):
+    sucesso, julgamento = False, None
+
+    try:
+        # requisição no formato do Gemini: 'contents' leva o par a ser julgado e
+        # 'system_instruction' leva a persona do julgador com o gabarito; a
+        # temperatura fica no padrão, como o Google recomenda para os modelos Gemini 3.
+        # O julgador não usa ferramentas, então a chamada automática de funções
+        # (ligada por padrão no google-genai) é desligada
+        conclusao = gemini.models.generate_content(
+            model = MODELO_JULGAMENTO,
+            contents = f"pergunta '{pergunta}', resposta '{resposta}'",
+            config = types.GenerateContentConfig(
+                system_instruction = persona_julgador,
+                automatic_function_calling = types.AutomaticFunctionCallingConfig(disable = True)
+            )
+        )
+        julgamento = conclusao.text
+
+        sucesso = True
+    except Exception as e:
+        print(f"ocorreu um erro ao obter o julgamento do Gemini: {e}")
+
+    return sucesso, julgamento
 
 
 def resumir(texto, limite = 95):
@@ -74,19 +123,14 @@ def interpretar_veredito(julgamento):
     return None
 
 
-def julgar(ollama, julgador, pergunta, resposta):
-    sucesso, julgamento = obter_resposta(ollama, julgador + [
-        {
-            "role": "user",
-            "content": f"pergunta '{pergunta}', resposta '{resposta}'"
-        }
-    ], modelo = MODELO_JULGAMENTO)
+def julgar(gemini, persona_julgador, pergunta, resposta):
+    sucesso, julgamento = obter_julgamento(gemini, persona_julgador, pergunta, resposta)
     assert sucesso, "o julgador não respondeu"
 
     return interpretar_veredito(julgamento), resumir(julgamento, 40)
 
 
-def avaliar_alucinacoes(ollama, julgador):
+def avaliar_alucinacoes(gemini, persona_julgador):
     """Etapa 1: o julgador precisa reprovar respostas deliberadamente erradas."""
     acertos = 0
 
@@ -96,7 +140,7 @@ def avaliar_alucinacoes(ollama, julgador):
         print(f"[alucinação {indice}/{len(ALUCINACOES)}] pergunta: '{pergunta}'")
         print(f"   resposta errada: '{resposta}'")
 
-        veredito, julgamento = julgar(ollama, julgador, pergunta, resposta)
+        veredito, julgamento = julgar(gemini, persona_julgador, pergunta, resposta)
         if veredito is False:
             acertos += 1
             print(f"   julgador: {julgamento} 👍 a alucinação foi julgada insatisfatória")
@@ -106,8 +150,8 @@ def avaliar_alucinacoes(ollama, julgador):
     return acertos, len(ALUCINACOES)
 
 
-def julgar_assistente(ollama, conhecimento, assistente, julgador):
-    """Etapa 2: o julgador avalia as respostas reais do assistente."""
+def julgar_assistente(ollama, gemini, conhecimento, assistente, persona_julgador):
+    """Etapa 2: o assistente responde pelo Ollama e o julgador avalia pelo Gemini."""
     acertos = 0
 
     for indice, (pergunta, _) in enumerate(conhecimento, start = 1):
@@ -122,7 +166,7 @@ def julgar_assistente(ollama, conhecimento, assistente, julgador):
         print(f"[assistente {indice}/{len(conhecimento)}] pergunta: '{pergunta}'")
         print(f"   resposta do assistente: '{resumir(resposta)}'")
 
-        veredito, julgamento = julgar(ollama, julgador, pergunta, resposta)
+        veredito, julgamento = julgar(gemini, persona_julgador, pergunta, resposta)
         if veredito is True:
             acertos += 1
             print(f"   julgador: {julgamento} 👍 a resposta do assistente foi julgada satisfatória")
@@ -136,16 +180,19 @@ def executar():
     iniciado, ollama = iniciar_ollama()
     assert iniciado, "Ollama indisponível"
 
+    iniciado, gemini = iniciar_gemini()
+    assert iniciado, "Gemini indisponível"
+
     carregado, conhecimento = carregar_conhecimento(BASE_CONHECIMENTO_JULGAMENTO)
     assert carregado and len(conhecimento) > 0, "base de conhecimento do julgamento indisponível"
 
-    julgador = iniciar_persona_julgamento(conhecimento)
+    persona_julgador = iniciar_persona_julgamento(conhecimento)
     assistente = iniciar_persona_assistente(conhecimento)
 
-    print(f"julgamento LLM-as-a-Judge | assistente: {MODELO_ASSISTENTE} | julgador: {MODELO_JULGAMENTO}")
+    print(f"julgamento LLM-as-a-Judge | assistente: {MODELO_ASSISTENTE} (Ollama) | julgador: {MODELO_JULGAMENTO} (Gemini)")
 
-    reprovadas, total_alucinacoes = avaliar_alucinacoes(ollama, julgador)
-    aprovadas, total_respostas = julgar_assistente(ollama, conhecimento, assistente, julgador)
+    reprovadas, total_alucinacoes = avaliar_alucinacoes(gemini, persona_julgador)
+    aprovadas, total_respostas = julgar_assistente(ollama, gemini, conhecimento, assistente, persona_julgador)
 
     print(f"placar: {reprovadas}/{total_alucinacoes} alucinações reprovadas, {aprovadas}/{total_respostas} respostas do assistente aprovadas")
 

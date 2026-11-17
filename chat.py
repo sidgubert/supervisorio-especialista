@@ -293,12 +293,19 @@ async def executar_async() -> None:
                         gravar_cache(mensagem, resposta, modelo_cache, colecao_cache)
                 else:
                     print("🤖 não sei responder esta pergunta, pergunte outra coisa sobre supervisão e manutenção da planta industrial")
-        except (KeyboardInterrupt, EOFError):
+        except EOFError:
             print("\n🤖 Encerrando o PlantaBot.")
 
 
 def executar() -> None:
-    asyncio.run(executar_async())
+    # o Ctrl+C é tratado aqui, e não dentro do laço: o cliente do Ollama é síncrono,
+    # então um Ctrl+C durante a resposta do modelo só é atendido quando ela termina,
+    # e o asyncio entrega a interrupção no 'await' seguinte (por exemplo, na chamada
+    # da ferramenta MCP), o que antes aparecia como um traceback da ferramenta
+    try:
+        asyncio.run(executar_async())
+    except KeyboardInterrupt:
+        print("\n🤖 Encerrando o PlantaBot.")
 
 
 if __name__ == "__main__":

@@ -47,10 +47,10 @@ Atendendo integralmente aos requisitos do documento `IFBA-Especialistas-Avaliaca
 | Módulo Básico Esperado | Arquivo Principal | Responsabilidade Técnica |
 |------------------------|-------------------|--------------------------|
 | **Chat Especialista** | `chat.py` | Interface conversacional com o especialista (`PlantaBot`), orquestrando cache semântico, *guardrails* de escopo, chamadas MCP e inferência LLM. |
-| **Motor de Inferência (LLM)** | `llm.py` | Integração com grandes modelos de linguagem executados localmente via **Ollama** (`qwen3:4b` e `mistral:latest`) através de API compatível com OpenAI. |
+| **Motor de Inferência (LLM)** | `llm.py` | Integração com o grande modelo de linguagem do assistente, executado localmente via **Ollama** (`qwen3:4b`) através de API compatível com OpenAI. |
 | **Cache Semântico** | `cache.py` | Vetorização de perguntas com `SentenceTransformer` (`paraphrase-multilingual-MiniLM-L12-v2`) e armazenamento/busca por similaridade de cosseno ($\le 0.20$) no `ChromaDB`. |
 | **Ferramentas MCP** | `ferramentas.py` e `servidores_mcp/` | Servidores *Model Context Protocol* (`streamable-http`) que expõem ferramentas de inspeção de sensores, alarmes, ordens de serviço e diagnóstico integrado de equipamentos. |
-| **Julgamento (LLM-as-a-Judge)** | `julgamento.py` | Script automatizado que utiliza um modelo julgador (`mistral:latest`) para validar respostas do assistente (`ATENDE`) e rejeitar alucinações (`NÃO ATENDE`). |
+| **Julgamento (LLM-as-a-Judge)** | `julgamento.py` | Script automatizado que utiliza o **Gemini** do Google (`gemini-3.6-flash`, via `google-genai`) como julgador para validar respostas do assistente (`ATENDE`) e rejeitar alucinações (`NÃO ATENDE`). |
 | **Testes Automatizados** | `teste.py` | Suíte `unittest` para verificação de precisão conceitual e bloqueio de perguntas fora do domínio (*guardrails*). |
 
 ---
@@ -63,7 +63,8 @@ Atendendo integralmente aos requisitos do documento `IFBA-Especialistas-Avaliaca
 | IEEE 1016-2009                         | Standard for Software Design Descriptions                                 |
 | Repositório `progbot` / `progbot.ferramentas` | Arquitetura de referência exemplificada pelo Prof. Luis Paulo em aula |
 | Model Context Protocol (MCP) Spec      | Protocolo aberto de comunicação entre LLMs e ferramentas externas         |
-| Ollama + Qwen3 / Mistral                 | Servidor local de LLMs e modelos de inferência e julgamento               |
+| Ollama + Qwen3                         | Servidor local de LLMs e modelo de inferência do assistente               |
+| Google Gemini API (`google-genai`)     | LLM julgador da avaliação *LLM-as-a-Judge* (`gemini-3.6-flash`)           |
 | SentenceTransformers & ChromaDB        | Biblioteca de embeddings multilíngues e banco de dados vetorial           |
 
 ---
@@ -95,7 +96,7 @@ flowchart TD
     CosineCheck -- Não (Miss) --> LLMCall[llm.py: Motor de Inferência Ollama]
     LLMCall <-->|2. Tool Call MCP / HTTP| MCPServer[ferramentas.py: Servidor MCP :8000]
     MCPServer <-->|REST / SQL ou Dados Determinísticos| Servicos[(Microsserviços: Sensores :7001, Alarmes :7002, Manutenção :7003)]
-    LLMCall -->|3. Persona + Conhecimento + Contexto MCP| OllamaLocal[(Ollama: qwen3:4b / mistral:latest)]
+    LLMCall -->|3. Persona + Conhecimento + Contexto MCP| OllamaLocal[(Ollama: qwen3:4b)]
     OllamaLocal --> RespostaLLM["🤖 Resposta [resposta do llm]"]
     RespostaLLM -->|Se não for recusa| GravarCache[Salva no ChromaDB]
     GravarCache --> Usuario
@@ -105,7 +106,8 @@ flowchart TD
 
 | Componente                     | Porta Host | Protocolo               | Papel na Arquitetura                              |
 |--------------------------------|------------|-------------------------|---------------------------------------------------|
-| **Ollama Server**              | `11434`    | HTTP (OpenAI API `/v1`) | Motor de inferência LLM (`qwen3:4b`, `mistral:latest`) |
+| **Ollama Server**              | `11434`    | HTTP (OpenAI API `/v1`) | Motor de inferência LLM do assistente (`qwen3:4b`) |
+| **API do Google Gemini**       | `443` (externa) | HTTPS (`generativelanguage.googleapis.com`) | LLM julgador do `julgamento.py` (`gemini-3.6-flash`) |
 | **Servidor MCP Unificado**     | `8000`     | HTTP (`streamable-http`)| Servidor MCP principal (`ferramentas.py`)         |
 | **MCP Sensores (Docker)**      | `8001`     | HTTP (`streamable-http`)| Servidor MCP dedicado ao serviço de sensores      |
 | **MCP Alarmes (Docker)**       | `8002`     | HTTP (`streamable-http`)| Servidor MCP dedicado ao serviço de alarmes       |
@@ -154,8 +156,8 @@ A base de conhecimento estruturada reside em `conhecimento/planta.json` (e o sub
 
 O módulo `llm.py` encapsula a comunicação com o servidor local **Ollama** (`http://localhost:11434/v1/`) utilizando a biblioteca `openai`:
 
-- **Modelo Assistente (`chat.py` / `julgamento.py`):** `mistral:latest` (temperatura `0.1`; o filtro `limpar_pensamento()` remove as tags `<think>...</think>`).
-- **Modelo Julgador (`julgamento.py`):** `mistral:latest` (modelo distinto do assistente, para que o julgamento seja independente).
+- **Modelo Assistente (`chat.py` / `julgamento.py`):** `qwen3:4b` (temperatura `0.1`; o filtro `limpar_pensamento()` remove as tags `<think>...</think>`).
+- **Modelo Julgador (`julgamento.py`):** não passa pelo Ollama. O julgamento usa o **Gemini** do Google (`gemini-3.6-flash`), um modelo de outro fornecedor, para que o julgamento seja independente do assistente (ver seção 10).
 - **Suporte a Tool Calling (`obter_resposta_com_ferramentas`):** Repassa a lista de ferramentas MCP convertidas para o schema de funções da API OpenAI/Ollama, permitindo que o modelo decida autonomamente quando invocar uma ferramenta antes de formular o parecer final.
 
 ---
@@ -200,9 +202,23 @@ O módulo `ferramentas.py` implementa um servidor MCP (`MCPServer("supervisao_pl
 
 O script `julgamento.py` implementa a avaliação automatizada do Sistema Especialista utilizando a técnica **LLM-as-a-Judge**:
 
-1. **Persona do Julgador (`iniciar_persona_julgamento`):** Parametriza o modelo `mistral:latest` como perito avaliador munido do gabarito de referência, instruído a responder exclusivamente `'ATENDE'` ou `'NÃO ATENDE'`.
-2. **Detecção de Alucinações (`avaliar_alucinacoes`):** Submete respostas deliberadamente falsas/alucinadas para perguntas do domínio industrial e confere que o julgador responde `NÃO ATENDE` a cada uma delas.
-3. **Avaliação do Assistente (`julgar_assistente`):** Submete as perguntas de avaliação ao assistente **PlantaBot** (`qwen3:4b`), coleta as respostas geradas e as envia ao julgador (`mistral:latest`), exigindo o veredito `ATENDE` para cada resposta. Ao final é impresso o placar das duas etapas.
+1. **Conexão com o Julgador (`iniciar_gemini`):** Lê a chave `GOOGLE_API_KEY` do arquivo `.env` da raiz do projeto (`python-dotenv`), cria o cliente `genai.Client` e consulta o modelo julgador (`models.get`) para confirmar, antes do julgamento, que a chave é aceita e que o modelo existe. O modelo padrão é `gemini-3.6-flash`, substituível pela variável `PLANTABOT_MODELO_JULGADOR`.
+2. **Persona do Julgador (`iniciar_persona_julgamento`):** Monta a instrução de sistema que parametriza o Gemini como perito avaliador munido do gabarito de referência, instruído a responder exclusivamente `'ATENDE'` ou `'NÃO ATENDE'`.
+3. **Requisição no formato do Gemini (`obter_julgamento`):** Cada julgamento é uma chamada `models.generate_content` em que `system_instruction` (dentro de `GenerateContentConfig`) leva a persona com o gabarito e `contents` leva o par pergunta/resposta a ser julgado. A temperatura fica no valor padrão, como o Google recomenda para os modelos Gemini 3. Como o julgador não usa ferramentas, a chamada automática de funções (*automatic function calling*), ligada por padrão no `google-genai`, é desligada.
+4. **Detecção de Alucinações (`avaliar_alucinacoes`):** Submete respostas deliberadamente falsas/alucinadas para perguntas do domínio industrial e confere que o julgador responde `NÃO ATENDE` a cada uma delas.
+5. **Avaliação do Assistente (`julgar_assistente`):** Submete as perguntas de avaliação ao assistente **PlantaBot** (`qwen3:4b`, via Ollama), coleta as respostas geradas e as envia ao julgador (Gemini), exigindo o veredito `ATENDE` para cada resposta. Ao final é impresso o placar das duas etapas.
+
+```python
+conclusao = gemini.models.generate_content(
+    model = MODELO_JULGAMENTO,
+    contents = f"pergunta '{pergunta}', resposta '{resposta}'",
+    config = types.GenerateContentConfig(
+        system_instruction = persona_julgador,
+        automatic_function_calling = types.AutomaticFunctionCallingConfig(disable = True)
+    )
+)
+julgamento = conclusao.text
+```
 
 ---
 
@@ -231,6 +247,7 @@ supervisorio-especialista/
 ├── julgamento.py             # Script de avaliação automatizada (LLM-as-a-Judge)
 ├── teste.py                  # Testes unitários automatizados (unittest)
 ├── requirements.txt          # Dependências Python do projeto
+├── .env.example              # Modelo do .env com a chave da API do Gemini (GOOGLE_API_KEY)
 ├── SDD-PlantaIndustrial.md   # Software Design Description (este documento)
 └── README.md                 # Guia rápido de instalação, arquitetura e execução
 ```
@@ -243,20 +260,22 @@ supervisorio-especialista/
 # 1. Instalar dependências Python
 pip install -r requirements.txt
 
-# 2. Garantir modelos no Ollama (rodando em http://localhost:11434)
+# 2. Garantir o modelo do assistente no Ollama (rodando em http://localhost:11434)
 ollama pull qwen3:4b
-ollama pull mistral:latest
 
-# 3. (Opcional) Iniciar o servidor MCP em um terminal separado
+# 3. Configurar a chave do Gemini (julgador): copiar o modelo e informar GOOGLE_API_KEY
+cp .env.example .env
+
+# 4. (Opcional) Iniciar o servidor MCP em um terminal separado
 python ferramentas.py
 
-# 4. Executar o Julgamento Automatizado (LLM-as-a-Judge)
+# 5. Executar o Julgamento Automatizado (LLM-as-a-Judge)
 python julgamento.py
 
-# 5. Executar os Testes Unitários
+# 6. Executar os Testes Unitários
 python teste.py
 
-# 6. Iniciar o Chat Interativo com o Especialista PlantaBot
+# 7. Iniciar o Chat Interativo com o Especialista PlantaBot
 python chat.py
 ```
 
@@ -269,7 +288,7 @@ python chat.py
 | **Seção 2 (Escopo)** | Concretização de um Sistema Especialista em formato de chatbot com mini-mundo próprio que emule o raciocínio de um especialista. | Mini-mundo de planta industrial (**PlantaView**) onde o **PlantaBot** diagnostica desvios de sensores, alarmes e ordens de serviço. |
 | **Item 2 e 3 (Originalidade)** | Não reutilizar o tema de POO (*ProgBot*) e possuir tema inédito. | Domínio de Supervisão, Diagnóstico Operacional e Manutenção de Planta Industrial. |
 | **Item 5(a) (Chat)** | Disponibilizar um chat para interação com o especialista. | Implementado em `chat.py` com persona especialista, *guardrails* de escopo e integração MCP/Cache. |
-| **Item 5(b) e 8 (LLM)** | Motor de inferência baseado em grande modelo de IA. | Implementado em `llm.py` consumindo modelos locais via **Ollama** (`qwen3:4b` e `mistral:latest`). |
+| **Item 5(b) e 8 (LLM)** | Motor de inferência baseado em grande modelo de IA. | Implementado em `llm.py` consumindo o modelo local `qwen3:4b` via **Ollama**; o julgamento usa o **Gemini** do Google (`gemini-3.6-flash`). |
 | **Item 5(c) e 8 (Cache Semântico)** | Cache semântico para registro e retorno de respostas para perguntas anteriormente processadas. | Implementado em `cache.py` com `SentenceTransformer` (`paraphrase-multilingual-MiniLM-L12-v2`) e `ChromaDB` (cosseno $\le 0.20$). |
-| **Item 5(d) e 8 (LLM-as-a-Judge)** | Script adicional para avaliação do sistema especialista utilizando *LLM-as-a-Judge*. | Implementado em `julgamento.py` avaliando alucinações (`NÃO ATENDE`) e respostas do especialista (`ATENDE`). |
+| **Item 5(d) e 8 (LLM-as-a-Judge)** | Script adicional para avaliação do sistema especialista utilizando *LLM-as-a-Judge*. | Implementado em `julgamento.py`, com o Gemini como julgador, avaliando alucinações (`NÃO ATENDE`) e respostas do especialista (`ATENDE`). |
 | **Item 8 (Ferramentas MCP)** | Presença clara de ferramentas MCP no código e na demonstração. | Implementado em `ferramentas.py` (servidor FastMCP/MCPServer) e integrado ao fluxo de conversa em `chat.py`. |
