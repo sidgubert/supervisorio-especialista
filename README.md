@@ -15,7 +15,7 @@ O **PlantaBot** é um agente inteligente e sistema especialista conversacional v
 O sistema integra Modelos de Linguagem de Larga Escala (LLMs) executados localmente através do **Ollama** e, na avaliação, o **Gemini** do Google como julgador, combinando:
 - **Engenharia de Prompt, Persona Especialista e Base de Conhecimento Estruturada (`conhecimento/planta.json`)**;
 - **Restrição de Escopo (*Guardrails*)**;
-- **Ferramentas MCP (*Model Context Protocol*)** para consulta de telemetria, alarmes e ordens de serviço em tempo real (`ferramentas.py` e microsserviços em `servicos/` e `servidores_mcp/`);
+- **Ferramentas MCP (*Model Context Protocol*)** para consulta de telemetria, alarmes e ordens de serviço em tempo real em um servidor MCP único (`ferramentas.py`);
 - **Cache Semântico Vetorial (`cache.py`)** com embeddings (`SentenceTransformer`) e `ChromaDB`;
 - **Avaliação Automatizada com LLM-as-a-Judge (`julgamento.py`)** e testes unitários (`teste.py`).
 
@@ -64,8 +64,7 @@ supervisorio-especialista/
 │
 ├── cache/                    # Diretório de persistência do banco vetorial ChromaDB
 │
-├── servidores_mcp/           # Servidores MCP containerizados (Sensores :8001, Alarmes :8002, Manutenção :8003)
-├── servicos/                 # Microsserviços REST Flask + PostgreSQL + Dashboard Web (dashboard.html)
+├── servicos/                 # (Opcional) Microsserviços REST Flask + PostgreSQL + Dashboard Web (dashboard.html)
 │
 ├── cache.py                  # Gerenciamento de cache semântico (SentenceTransformer + ChromaDB)
 ├── ferramentas.py            # Servidor MCP unificado de ferramentas da planta (porta 8000)
@@ -76,6 +75,7 @@ supervisorio-especialista/
 ├── requirements.txt          # Dependências Python do projeto
 ├── .env.example              # Modelo do .env com a chave da API do Gemini (GOOGLE_API_KEY)
 ├── SDD-PlantaIndustrial.md   # Documento de especificação de projeto (Software Design Description)
+├── roteiro-video.md          # Roteiro do vídeo de apresentação (até 8 minutos)
 └── README.md                 # Documentação do projeto
 ```
 
@@ -137,22 +137,25 @@ cp .env.example .env
 ```text
 GOOGLE_API_KEY=sua_chave_aqui
 ```
-O `.env` está no `.gitignore` e não é enviado ao repositório. O mesmo arquivo atende o `servidores_mcp/chat_google.py`.
+O `.env` está no `.gitignore` e não é enviado ao repositório.
 
 Os modelos podem ser trocados sem editar o código, pelas variáveis de ambiente `PLANTABOT_MODELO` (assistente, no Ollama) e `PLANTABOT_MODELO_JULGADOR` (julgador, no Gemini).
 
-### 6. (Opcional) Iniciar o Servidor de Ferramentas MCP
-Em um terminal separado, inicie o servidor MCP local em `http://127.0.0.1:8000/mcp`:
+### 6. Iniciar o Servidor de Ferramentas MCP (obrigatório)
+Em um terminal separado, inicie o servidor MCP em `http://127.0.0.1:8000/mcp` e deixe-o rodando enquanto usa o chat:
 ```bash
 python ferramentas.py
 ```
-*(Caso deseje subir também os microsserviços Docker completos com PostgreSQL e o Dashboard Web, consulte as instruções em `SDD-PlantaIndustrial.md`).*
+O servidor funciona sozinho: sem os microsserviços de `servicos/`, as ferramentas devolvem dados simulados de contingência (identificados no campo `fonte`). Se o chat for iniciado sem este servidor, ele exibe um aviso e responde sem consultar sensores, alarmes e ordens de serviço.
+
+*(Extra opcional: para que as ferramentas leiam dados de bancos PostgreSQL reais e para ver o Dashboard Web, suba os microsserviços de `servicos/` com Docker, conforme o `SDD-PlantaIndustrial.md`. Não é necessário para avaliar o sistema.)*
 
 ---
 
 ## ▶️ Execução dos Módulos
 
 ### 💬 1. Conversar com o Especialista (PlantaBot)
+Com o `ferramentas.py` rodando em outro terminal (passo 6):
 ```bash
 python chat.py
 ```
@@ -184,10 +187,12 @@ python teste.py
 - Modelos: assistente `qwen3:4b` (Ollama) e julgador `gemini-3.6-flash` (Google). O `qwen2.5:1.5b` foi descartado como assistente porque, nos testes, respondeu perguntas fora do domínio e nem sempre acionou as ferramentas.
 
 **Organização**
-- Pasta `mcp/` renomeada para `servidores_mcp/` (o nome antigo colidia com a biblioteca `mcp` do Python).
+- Removida a pasta `servidores_mcp/` (três servidores MCP em Docker e um segundo chat com Gemini, `chat_google.py`). O PlantaBot passa a ter um único servidor MCP, o `ferramentas.py`, e o `chat.py` não tenta mais os servidores das portas 8001 a 8003. O conteúdo removido foi preservado na branch `arquivo/servidores-mcp`.
+- O servidor MCP deixou de ser opcional na documentação, e o chat mostra um aviso destacado quando ele não está no ar.
+- `roteiro-video.md`: roteiro do vídeo de apresentação (até 8 minutos).
 - Removidos `mcp/testa_chave.py` e `Livro_SE_Capitulo_PlantaBot.zip` (cópia duplicada de `livro_se/`).
-- `cache/` incluído no `.gitignore`; `google-genai` incluído no `requirements.txt` (usado por `julgamento.py` e `servidores_mcp/chat_google.py`).
-- `.env.example` movido de `servidores_mcp/` para a raiz: um único `.env` atende o `julgamento.py` e o `servidores_mcp/chat_google.py`.
+- `cache/` incluído no `.gitignore`; `google-genai` incluído no `requirements.txt` (usado por `julgamento.py`).
+- `.env.example` movido para a raiz do projeto.
 
 **Capítulo do livro (`livro_se/capitulos/capitulo_2/`)**
 - Texto reescrito para descrever apenas o que o código faz.

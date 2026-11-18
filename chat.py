@@ -34,12 +34,9 @@ LIMITE_HISTORICO = 8
 # teto de rodadas de ferramentas por pergunta, para o modelo não ficar em laço
 LIMITE_RODADAS_FERRAMENTAS = 5
 
+# servidor MCP único do PlantaBot (ferramentas.py); deve ser iniciado antes do chat
 URL_FERRAMENTAS = "http://127.0.0.1:8000/mcp"
-SERVICOS_MCP_DOCKER = {
-    "sensores": "http://localhost:8001/mcp",
-    "alarmes": "http://localhost:8002/mcp",
-    "manutencao": "http://localhost:8003/mcp",
-}
+NOME_SERVIDOR_MCP = "supervisao_planta_industrial"
 
 
 def iniciar_persona_assistente(conhecimento: list[tuple[str, str]]) -> list[dict[str, str]]:
@@ -106,41 +103,38 @@ async def conectar_ferramentas(contexto: AsyncExitStack) -> tuple[dict[str, dict
     mapa_ferramentas = {}
     ferramentas_openai = []
 
-    urls_ativas = {}
-    if await servidor_disponivel(URL_FERRAMENTAS):
-        urls_ativas["supervisao_planta_industrial"] = URL_FERRAMENTAS
-    else:
-        for nome_srv, url_srv in SERVICOS_MCP_DOCKER.items():
-            if await servidor_disponivel(url_srv):
-                urls_ativas[nome_srv] = url_srv
-
-    if not urls_ativas:
-        print(f"servidor de ferramentas MCP indisponível em {URL_FERRAMENTAS}. Para consultas MCP em tempo real, execute 'python ferramentas.py'.")
+    if not await servidor_disponivel(URL_FERRAMENTAS):
+        aviso = (
+            f"servidor de ferramentas MCP indisponível em {URL_FERRAMENTAS}\n"
+            "o PlantaBot vai responder SEM consultar sensores, alarmes e ordens de serviço.\n"
+            "para usar as ferramentas MCP, abra outro terminal, execute 'python ferramentas.py' e reinicie o chat."
+        )
+        linha = "=" * 78
+        print(f"\n{linha}\n⚠️  ATENÇÃO: {aviso}\n{linha}\n")
         return mapa_ferramentas, ferramentas_openai
 
-    for nome_servico, url in urls_ativas.items():
-        try:
-            stream_leitura, stream_escrita = await contexto.enter_async_context(streamable_http_client(url))
-            conexao = await contexto.enter_async_context(ClientSession(stream_leitura, stream_escrita))
-            await conexao.initialize()
+    try:
+        stream_leitura, stream_escrita = await contexto.enter_async_context(streamable_http_client(URL_FERRAMENTAS))
+        conexao = await contexto.enter_async_context(ClientSession(stream_leitura, stream_escrita))
+        await conexao.initialize()
 
-            listagem = await conexao.list_tools()
-            for f in listagem.tools:
-                mapa_ferramentas[f.name] = {
-                    "servico": nome_servico,
-                    "conexao": conexao
+        listagem = await conexao.list_tools()
+        for f in listagem.tools:
+            mapa_ferramentas[f.name] = {
+                "servico": NOME_SERVIDOR_MCP,
+                "conexao": conexao
+            }
+            ferramentas_openai.append({
+                "type": "function",
+                "function": {
+                    "name": f.name,
+                    "description": f.description,
+                    "parameters": f.inputSchema if hasattr(f, "inputSchema") else getattr(f, "input_schema", {})
                 }
-                ferramentas_openai.append({
-                    "type": "function",
-                    "function": {
-                        "name": f.name,
-                        "description": f.description,
-                        "parameters": f.inputSchema if hasattr(f, "inputSchema") else getattr(f, "input_schema", {})
-                    }
-                })
-            print(f"conectado ao serviço MCP '{nome_servico}' ({url})")
-        except Exception as e:
-            print(f"erro conectando ao serviço MCP '{nome_servico}': {e}")
+            })
+        print(f"conectado ao servidor MCP '{NOME_SERVIDOR_MCP}' ({URL_FERRAMENTAS}): {len(ferramentas_openai)} ferramentas disponíveis")
+    except Exception as e:
+        print(f"erro conectando ao servidor MCP '{NOME_SERVIDOR_MCP}': {e}")
 
     return mapa_ferramentas, ferramentas_openai
 

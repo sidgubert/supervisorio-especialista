@@ -49,7 +49,7 @@ Atendendo integralmente aos requisitos do documento `IFBA-Especialistas-Avaliaca
 | **Chat Especialista** | `chat.py` | Interface conversacional com o especialista (`PlantaBot`), orquestrando cache semântico, *guardrails* de escopo, chamadas MCP e inferência LLM. |
 | **Motor de Inferência (LLM)** | `llm.py` | Integração com o grande modelo de linguagem do assistente, executado localmente via **Ollama** (`qwen3:4b`) através de API compatível com OpenAI. |
 | **Cache Semântico** | `cache.py` | Vetorização de perguntas com `SentenceTransformer` (`paraphrase-multilingual-MiniLM-L12-v2`) e armazenamento/busca por similaridade de cosseno ($\le 0.20$) no `ChromaDB`. |
-| **Ferramentas MCP** | `ferramentas.py` e `servidores_mcp/` | Servidores *Model Context Protocol* (`streamable-http`) que expõem ferramentas de inspeção de sensores, alarmes, ordens de serviço e diagnóstico integrado de equipamentos. |
+| **Ferramentas MCP** | `ferramentas.py` | Servidor *Model Context Protocol* (`streamable-http`) que expõe ferramentas de inspeção de sensores, alarmes, ordens de serviço e diagnóstico integrado de equipamentos. |
 | **Julgamento (LLM-as-a-Judge)** | `julgamento.py` | Script automatizado que utiliza o **Gemini** do Google (`gemini-3.6-flash`, via `google-genai`) como julgador para validar respostas do assistente (`ATENDE`) e rejeitar alucinações (`NÃO ATENDE`). |
 | **Testes Automatizados** | `teste.py` | Suíte `unittest` para verificação de precisão conceitual e bloqueio de perguntas fora do domínio (*guardrails*). |
 
@@ -108,10 +108,7 @@ flowchart TD
 |--------------------------------|------------|-------------------------|---------------------------------------------------|
 | **Ollama Server**              | `11434`    | HTTP (OpenAI API `/v1`) | Motor de inferência LLM do assistente (`qwen3:4b`) |
 | **API do Google Gemini**       | `443` (externa) | HTTPS (`generativelanguage.googleapis.com`) | LLM julgador do `julgamento.py` (`gemini-3.6-flash`) |
-| **Servidor MCP Unificado**     | `8000`     | HTTP (`streamable-http`)| Servidor MCP principal (`ferramentas.py`)         |
-| **MCP Sensores (Docker)**      | `8001`     | HTTP (`streamable-http`)| Servidor MCP dedicado ao serviço de sensores      |
-| **MCP Alarmes (Docker)**       | `8002`     | HTTP (`streamable-http`)| Servidor MCP dedicado ao serviço de alarmes       |
-| **MCP Manutenção (Docker)**    | `8003`     | HTTP (`streamable-http`)| Servidor MCP dedicado ao serviço de manutenção    |
+| **Servidor MCP**               | `8000`     | HTTP (`streamable-http`)| Servidor MCP único do PlantaBot (`ferramentas.py`) |
 | **Serviço REST Sensores**      | `7001`     | HTTP/REST               | Microsserviço Flask + PostgreSQL (`:7004`)        |
 | **Serviço REST Alarmes**       | `7002`     | HTTP/REST               | Microsserviço Flask + PostgreSQL (`:7005`)        |
 | **Serviço REST Manutenção**    | `7003`     | HTTP/REST               | Microsserviço Flask + PostgreSQL (`:7006`)        |
@@ -177,7 +174,7 @@ O módulo `cache.py` evita reprocessamento no LLM para perguntas semanticamente 
 
 ## 9. Viewpoint MCP (Model Context Protocol)
 
-O módulo `ferramentas.py` implementa um servidor MCP (`MCPServer("supervisao_planta_industrial")`) exposto via transporte `streamable-http` em `http://127.0.0.1:8000/mcp` (além dos servidores containerizados em `servidores_mcp/sensores`, `servidores_mcp/alarmes` e `servidores_mcp/manutencao` nas portas `8001` a `8003`).
+O módulo `ferramentas.py` implementa um servidor MCP (`MCPServer("supervisao_planta_industrial")`) exposto via transporte `streamable-http` em `http://127.0.0.1:8000/mcp`. É o único servidor MCP do sistema e deve estar no ar antes de iniciar o `chat.py`.
 
 ### Ferramentas Expostas pelo Servidor MCP
 
@@ -222,7 +219,7 @@ julgamento = conclusao.text
 
 ---
 
-## 11. Microsserviços REST, Bancos de Dados e Dashboard
+## 11. Microsserviços REST, Bancos de Dados e Dashboard (extra opcional)
 
 A camada de persistência e visualização web (`servicos/`) é composta por:
 - **Três microsserviços Flask RESTful** (`sensores:7001`, `alarmes:7002`, `manutencao:7003`), cada um com seu próprio banco **PostgreSQL** (`dados-sensores:7004`, `dados-alarmes:7005`, `dados-manutencao:7006`) inicializado com seeds determinísticos (`init.sql`).
@@ -238,8 +235,7 @@ supervisorio-especialista/
 │   ├── planta.json           # Base de conhecimento estruturada do especialista (20 itens)
 │   └── planta_menor.json     # Base enxuta para execução rápida do LLM-as-a-Judge
 ├── cache/                    # Persistência local do banco vetorial ChromaDB
-├── servidores_mcp/           # Servidores MCP containerizados (Docker)
-├── servicos/                 # Microsserviços REST Flask + PostgreSQL + Dashboard Web
+├── servicos/                 # (Opcional) Microsserviços REST Flask + PostgreSQL + Dashboard Web
 ├── cache.py                  # Módulo de Cache Semântico (SentenceTransformer + ChromaDB)
 ├── ferramentas.py            # Servidor MCP de ferramentas da planta industrial
 ├── llm.py                    # Motor de inferência LLM integrado ao Ollama
@@ -266,7 +262,7 @@ ollama pull qwen3:4b
 # 3. Configurar a chave do Gemini (julgador): copiar o modelo e informar GOOGLE_API_KEY
 cp .env.example .env
 
-# 4. (Opcional) Iniciar o servidor MCP em um terminal separado
+# 4. Iniciar o servidor MCP em um terminal separado (obrigatório para o chat usar as ferramentas)
 python ferramentas.py
 
 # 5. Executar o Julgamento Automatizado (LLM-as-a-Judge)
