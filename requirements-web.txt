@@ -1,0 +1,35 @@
+# Interface web do PlantaBot (app.py), feita com Chainlit.
+#
+# O Chainlit 2.12 declara mcp<2.0.0, mas o projeto usa o mcp 2.x (ferramentas.py e
+# o cliente MCP do chat.py). O app.py usa o próprio cliente MCP do PlantaBot e não
+# o recurso de MCP do Chainlit, que é o único trecho que depende do mcp 1.x.
+# Por isso o Chainlit é instalado sem dependências e estas são instaladas à parte,
+# sem o mcp:
+#
+#   pip install -r requirements.txt
+#   pip install --no-deps chainlit==2.12.0
+#   pip install -r requirements-web.txt
+#
+plotly==7.1.0
+aiofiles>=23.1.0
+asyncer>=0.0.8,<0.1.0
+click>=8.1.3,<9.0.0
+dataclasses-json>=0.6.7,<0.7.0
+fastapi>=0.116.1
+filetype>=1.2.0,<2.0.0
+httpx>=0.23.0
+lazify>=0.4.0,<0.5.0
+literalai==0.1.201
+nest-asyncio>=1.6.0,<2.0.0
+packaging>=23.1
+pydantic-settings>=2.14.2
+pydantic>=2.11.0,<3
+pyjwt>=2.13.0,<3.0.0
+python-dotenv>=1.0.0,<2.0.0
+python-multipart>=0.0.30,<1.0.0
+python-socketio>=5.11.0,<6.0.0
+starlette>=0.47.2
+syncer>=2.0.3,<3.0.0
+tomli>=2.0.1,<3.0.0
+uvicorn>=0.35.0
+watchfiles>=1.1.1,<2.0.0

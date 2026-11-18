@@ -19,7 +19,7 @@ O mini-mundo adotado, ilustrado na Figura \ref{fig:minimundo-plantabot}, contém
 
 \section{Arquitetura do PlantaBot}
 
-A Figura \ref{fig:arquitetura-plantabot} exibe a arquitetura do PlantaBot. O usuário conversa com o especialista por meio de um chat, e cada pergunta é enviada a um LLM executado localmente pelo \textit{Ollama}. Um \textit{prompt} atribui ao modelo a persona de um perito em supervisão industrial, carrega a base de conhecimento (vinte pares de pergunta e resposta sobre os equipamentos, seus \textit{setpoints}, a classificação dos alarmes e os tipos de manutenção) e instrui o modelo a recusar perguntas alheias ao domínio.
+A Figura \ref{fig:arquitetura-plantabot} exibe a arquitetura do PlantaBot. O usuário conversa com o especialista por meio de um chat, no terminal ou em uma interface web, e cada pergunta é enviada a um LLM executado localmente pelo \textit{Ollama}. Um \textit{prompt} atribui ao modelo a persona de um perito em supervisão industrial, carrega a base de conhecimento (vinte pares de pergunta e resposta sobre os equipamentos, seus \textit{setpoints}, a classificação dos alarmes e os tipos de manutenção) e instrui o modelo a recusar perguntas alheias ao domínio.
 
 A memória de trabalho combina (i) um cache semântico, que recupera a resposta dada a uma pergunta anterior de mesmo sentido, e (ii) o histórico das últimas mensagens da sessão, enviado ao LLM junto com cada nova pergunta.
 
@@ -45,14 +45,14 @@ As ferramentas consultam os três serviços da planta, implementados como servi�
 
 \section{Desenvolvimento e Avaliação}
 
-O PlantaBot foi desenvolvido em Python. A biblioteca \textit{openai} envia as mensagens ao \textit{Ollama}, que executa o modelo \texttt{qwen3:4b}. A \textit{sentence-transformers} converte cada pergunta em um \textit{embedding}, e o \textit{chromadb} armazena esses vetores; uma resposta é recuperada do cache quando a distância de cosseno entre a nova pergunta e uma pergunta anterior é de até $0{,}20$. O servidor MCP é implementado com o \texttt{FastMCP}. Respostas obtidas com ferramentas não são gravadas no cache, porque refletem o estado da planta em um instante, assim como as recusas.
+O PlantaBot foi desenvolvido em Python. A biblioteca \textit{openai} envia as mensagens ao \textit{Ollama}, que executa o modelo \texttt{qwen3:4b}. A \textit{sentence-transformers} converte cada pergunta em um \textit{embedding}, e o \textit{chromadb} armazena esses vetores; uma resposta é recuperada do cache quando a distância de cosseno entre a nova pergunta e uma pergunta anterior é de até $0{,}20$. O servidor MCP é implementado com o \texttt{FastMCP}. Respostas obtidas com ferramentas não são gravadas no cache, porque refletem o estado da planta em um instante, assim como as recusas. A interface web é construída com o \textit{Chainlit}: a resposta é exibida à medida que é gerada, cada ferramenta acionada aparece como uma etapa que pode ser expandida e as leituras de sensores são apresentadas em gráficos.
 
-A Figura \ref{fig:funcionamento-plantabot} mostra uma sessão de uso: a conexão ao servidor MCP, a saudação, o acionamento de uma ferramenta (com os serviços desligados e, portanto, com dados simulados), uma resposta gerada pelo LLM, a mesma resposta recuperada do cache para uma pergunta reformulada e a recusa de uma pergunta fora do domínio.
+A Figura \ref{fig:funcionamento-plantabot} mostra uma sessão de uso na interface web. À esquerda, o pedido das leituras do Compressor 3 aciona uma ferramenta; como os serviços estavam desligados, a interface avisa que os dados são simulados, e a resposta traz um gráfico com a faixa de operação e o valor lido de cada grandeza. À direita, aparecem uma resposta gerada pelo LLM, a mesma resposta recuperada do cache para uma pergunta reformulada e a recusa de uma pergunta fora do domínio.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=1.0\textwidth]{capitulos/plantabot/funcionamento.png}
-\caption{Funcionamento do PlantaBot}
+\caption{Funcionamento do PlantaBot na interface web}
 \label{fig:funcionamento-plantabot}
 \end{figure}
 
