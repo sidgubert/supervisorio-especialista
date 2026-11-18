@@ -45,7 +45,21 @@ def iniciar_gemini():
     iniciado, gemini = False, None
 
     try:
-        gemini = genai.Client(api_key = os.environ["GOOGLE_API_KEY"])
+        # o Gemini pode recusar pedidos por sobrecarga (503), cota (429) ou demora
+        # (504); são falhas passageiras, então o próprio SDK repete a chamada com
+        # espera crescente antes de desistir
+        gemini = genai.Client(
+            api_key = os.environ["GOOGLE_API_KEY"],
+            http_options = types.HttpOptions(
+                timeout = 120_000,
+                retry_options = types.HttpRetryOptions(
+                    attempts = 5,
+                    initial_delay = 2,
+                    max_delay = 30,
+                    http_status_codes = [429, 503, 504]
+                )
+            )
+        )
         # criar o cliente não valida nada: consultar o modelo confirma que a
         # chave é aceita e que o nome do modelo julgador existe
         gemini.models.get(model = MODELO_JULGAMENTO)
@@ -125,7 +139,10 @@ def interpretar_veredito(julgamento):
 
 def julgar(gemini, persona_julgador, pergunta, resposta):
     sucesso, julgamento = obter_julgamento(gemini, persona_julgador, pergunta, resposta)
-    assert sucesso, "o julgador não respondeu"
+    # se o julgador falhar mesmo após as novas tentativas, a pergunta fica sem
+    # veredito e o julgamento segue para as próximas, em vez de abortar tudo
+    if not sucesso:
+        return None, "SEM VEREDITO (julgador indisponível)"
 
     return interpretar_veredito(julgamento), resumir(julgamento, 40)
 
@@ -144,6 +161,8 @@ def avaliar_alucinacoes(gemini, persona_julgador):
         if veredito is False:
             acertos += 1
             print(f"   julgador: {julgamento} 👍 a alucinação foi julgada insatisfatória")
+        elif veredito is None:
+            print(f"   julgador: {julgamento} ⚠️ não foi possível julgar a alucinação")
         else:
             print(f"   julgador: {julgamento} 👎 o julgador NÃO reprovou a alucinação")
 
@@ -170,6 +189,8 @@ def julgar_assistente(ollama, gemini, conhecimento, assistente, persona_julgador
         if veredito is True:
             acertos += 1
             print(f"   julgador: {julgamento} 👍 a resposta do assistente foi julgada satisfatória")
+        elif veredito is None:
+            print(f"   julgador: {julgamento} ⚠️ não foi possível julgar a resposta do assistente")
         else:
             print(f"   julgador: {julgamento} 👎 a resposta do assistente NÃO foi julgada satisfatória")
 
