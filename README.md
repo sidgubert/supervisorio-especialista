@@ -27,7 +27,7 @@ O sistema integra Modelos de Linguagem de Larga Escala (LLMs) executados localme
 - **Restrição de Domínio (*Guardrails*):** Caso receba perguntas fora do escopo industrial, o assistente recusa educadamente o atendimento (`"não posso responder esta pergunta"`).
 - **Cache Semântico com Embeddings (`cache.py`):** Antes de acionar o LLM/MCP, o sistema gera embeddings da pergunta com `paraphrase-multilingual-MiniLM-L12-v2` e consulta uma coleção vetorial no `ChromaDB` (distância de cosseno $\le 0.20$). Perguntas semanticamente equivalentes são respondidas com a indicação `[recuperada do cache]`. Respostas obtidas com ferramentas MCP (estado da planta naquele instante) e recusas de escopo não são gravadas no cache.
 - **Ferramentas MCP (`ferramentas.py`):** Exposição de ferramentas via *Model Context Protocol* (`streamable-http`) para consulta de leituras de sensores, alarmes por severidade e ordens de serviço, integrando-se aos microsserviços REST/PostgreSQL (`servicos/`). Se eles estiverem desligados, as ferramentas devolvem dados simulados de contingência, identificados no campo `fonte`, e o chat avisa o operador.
-- **Validação com LLM-as-a-Judge (`julgamento.py`):** O Gemini do Google (`gemini-3.6-flash`, via biblioteca `google-genai`) atua como julgador e avalia automaticamente se as respostas do assistente local (`qwen3:4b`) atendem aos critérios técnicos (`ATENDE`) e rejeita alucinações deliberadas (`NÃO ATENDE`).
+- **Validação com LLM-as-a-Judge (`julgamento.py`):** O Gemini do Google (`gemini-3.5-flash-lite`, via biblioteca `google-genai`) atua como julgador e avalia automaticamente se as respostas do assistente local (`qwen3:4b`) atendem aos critérios técnicos (`ATENDE`) e rejeita alucinações deliberadas (`NÃO ATENDE`).
 - **Memória da conversa:** as últimas 8 mensagens da sessão acompanham cada nova pergunta (`LIMITE_HISTORICO` em `chat.py`).
 - **Testes Automatizados (`teste.py`):** Suíte `unittest` para validação de assertividade conceitual e filtros de escopo.
 
@@ -86,7 +86,7 @@ supervisorio-especialista/
 - **Linguagem:** Python 3.10+
 - **Servidor de LLM Local:** [Ollama](https://ollama.com/)
   - **Modelo Assistente:** `qwen3:4b`
-- **LLM Julgador:** [Google Gemini](https://ai.google.dev/) (`gemini-3.6-flash`), acessado pela API do Google com a chave `GOOGLE_API_KEY`
+- **LLM Julgador:** [Google Gemini](https://ai.google.dev/) (`gemini-3.5-flash-lite`), acessado pela API do Google com a chave `GOOGLE_API_KEY`
 - **Embeddings & Vetorização:** `sentence-transformers` (`paraphrase-multilingual-MiniLM-L12-v2`)
 - **Banco Vetorial:** `chromadb` (persistência local com distância de cosseno)
 - **Servidor e Cliente MCP:** `fastmcp` / `mcp` (`streamable-http`)
@@ -183,8 +183,9 @@ python teste.py
 - `ferramentas.py`: aceita o equipamento por id ou por nome ("Caldeira 1"); valida grandeza, severidade e status; informa a origem dos dados no campo `fonte`; o diagnóstico considera também o setpoint mínimo; o servidor escuta apenas em `127.0.0.1`.
 - `julgamento.py`: alucinações do próprio domínio industrial; exige o veredito `ATENDE` para aprovar (antes bastava não conter `NÃO ATENDE`); placar final; julgador configurável por `PLANTABOT_MODELO_JULGADOR`.
 - `julgamento.py`: o julgador passou a ser o Gemini do Google (`gemini-3.6-flash`) no lugar do `mistral:latest` local. A requisição usa o formato nativo do Gemini (`google-genai`, `models.generate_content`): a persona e o gabarito vão em `system_instruction` e o par pergunta/resposta vai em `contents`. Na inicialização, o script confirma que a chave é aceita e que o modelo existe.
+- `julgamento.py`: julgador padrão trocado de `gemini-3.6-flash` para `gemini-3.5-flash-lite`: a cota gratuita do `gemini-3.6-flash` (20 pedidos por dia) se esgotava durante os testes do julgamento.
 - `teste.py`: importações explícitas (antes o teste rodava, sem aviso, com o modelo do julgador).
-- Modelos: assistente `qwen3:4b` (Ollama) e julgador `gemini-3.6-flash` (Google). O `qwen2.5:1.5b` foi descartado como assistente porque, nos testes, respondeu perguntas fora do domínio e nem sempre acionou as ferramentas.
+- Modelos: assistente `qwen3:4b` (Ollama) e julgador `gemini-3.5-flash-lite` (Google). O `qwen2.5:1.5b` foi descartado como assistente porque, nos testes, respondeu perguntas fora do domínio e nem sempre acionou as ferramentas.
 
 **Organização**
 - Removida a pasta `servidores_mcp/` (três servidores MCP em Docker e um segundo chat com Gemini, `chat_google.py`). O PlantaBot passa a ter um único servidor MCP, o `ferramentas.py`, e o `chat.py` não tenta mais os servidores das portas 8001 a 8003. O conteúdo removido foi preservado na branch `arquivo/servidores-mcp`.
@@ -194,9 +195,11 @@ python teste.py
 - `cache/` incluído no `.gitignore`; `google-genai` incluído no `requirements.txt` (usado por `julgamento.py`).
 - `.env.example` movido para a raiz do projeto.
 
-**Capítulo do livro (`livro_se/capitulos/capitulo_2/`)**
+**Capítulo do livro (`livro_se/capitulos/plantabot/`)**
 - Texto reescrito para descrever apenas o que o código faz.
 - Figuras de funcionamento e de julgamento geradas a partir da saída real de `python chat.py` e `python julgamento.py`.
 - Julgador descrito como o Gemini do Google.
-- Pendente: gerar novamente a figura `julgamento.png` com a saída de `python julgamento.py` usando o Gemini (a atual foi gerada com o `mistral:latest`).
+- `livro_se/` contém apenas o capítulo do PlantaBot (introdução e capítulo de exemplo removidos), para entrega separada; pasta do capítulo renomeada de `capitulo_2/` para `plantabot/` e referências não citadas removidas.
+- Figuras `funcionamento.png` e `julgamento.png` geradas novamente com a saída atual (servidor MCP único; julgador `gemini-3.5-flash-lite`).
+- Texto revisado e enxugado para caber em 4 páginas.
 - Pendente: substituir os links do Zenodo (código e vídeo) pelos definitivos.

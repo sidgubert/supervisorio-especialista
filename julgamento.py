@@ -17,7 +17,7 @@ load_dotenv(DIRETORIO_BASE / ".env")
 # o assistente julgado é o mesmo modelo local usado no chat (Ollama); o julgador
 # é o Gemini, do Google, e pode ser trocado sem editar o código: defina PLANTABOT_MODELO_JULGADOR
 MODELO_ASSISTENTE = MODELO
-MODELO_JULGAMENTO = os.environ.get("PLANTABOT_MODELO_JULGADOR", "gemini-3.6-flash")
+MODELO_JULGAMENTO = os.environ.get("PLANTABOT_MODELO_JULGADOR", "gemini-3.5-flash-lite")
 BASE_CONHECIMENTO_JULGAMENTO = DIRETORIO_BASE / "conhecimento" / "planta_menor.json"
 
 VEREDITO_APROVADO = "ATENDE"
