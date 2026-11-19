@@ -240,4 +240,4 @@ python teste.py
 - Figuras `funcionamento.png` e `julgamento.png` geradas novamente com a saída atual (servidor MCP único; julgador `gemini-3.5-flash-lite`).
 - Texto revisado e enxugado para caber em 4 páginas.
 - Figura `funcionamento.png` substituída por uma sessão real na interface web (`app.py` com o `qwen3:4b`): ferramenta MCP com aviso de dados simulados e gráfico de leituras, resposta do LLM, a mesma resposta recuperada do cache e recusa fora do domínio. O texto passou a citar a interface web na arquitetura e no desenvolvimento, e a descrição da figura foi reescrita; o capítulo continua com o mesmo número de páginas.
-- Pendente: substituir os links do Zenodo (código e vídeo) pelos definitivos.
+- Links definitivos no capítulo: código no GitHub e vídeo no Zenodo (https://zenodo.org/records/24356687, DOI 10.5281/zenodo.24356687).
