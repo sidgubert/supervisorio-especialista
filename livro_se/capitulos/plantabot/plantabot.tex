@@ -1,4 +1,5 @@
-\chapter{PlantaBot - Um Sistema Especialista para Supervisão e Manutenção de Planta Industrial}
+\chapter*{PlantaBot - Um Sistema Especialista para Supervisão e Manutenção de Planta Industrial}
+\addcontentsline{toc}{chapter}{PlantaBot - Um Sistema Especialista para Supervisão e Manutenção de Planta Industrial}
 
 \begin{flushright}
 Sid Gubert
@@ -6,33 +7,33 @@ Sid Gubert
 
 O PlantaBot é um assistente virtual especialista em supervisão e manutenção de uma planta industrial de pequeno porte. Seu objetivo é ajudar operadores e técnicos a interpretar as leituras de sensores, os alarmes e as ordens de serviço (OS) dos equipamentos.
 
-Em uma planta instrumentada, uma leitura isolada de temperatura, pressão ou vibração raramente basta para decidir o que fazer \cite{mobley2002introduction}. O profissional experiente verifica se a grandeza ultrapassou o seu limite operacional (\textit{setpoint}), qual é a severidade dos alarmes ativos e se já existe uma OS aberta para o equipamento. O PlantaBot emula esse raciocínio ao combinar um Grande Modelo de Linguagem (LLM) com uma base de conhecimento do domínio e com consultas aos dados da planta \cite{yang2025comprehensive,garridomerchan2026gofai}.
+Em uma planta instrumentada, uma leitura isolada de temperatura, pressão ou vibração raramente basta para decidir o que fazer \cite{mobley2002introduction}. Antes de agir, o técnico confere se a grandeza passou do limite operacional (\textit{setpoint}), a severidade dos alarmes ativos e se já há OS aberta para o equipamento. O PlantaBot reproduz esse raciocínio combinando um Grande Modelo de Linguagem (LLM) com uma base de conhecimento do domínio e com consultas aos dados da planta \cite{yang2025comprehensive,garridomerchan2026gofai}.
 
-O mini-mundo adotado, ilustrado na Figura \ref{fig:minimundo-plantabot}, contém oito equipamentos distribuídos em quatro setores: duas bombas, três compressores, dois motores e uma caldeira. Cada equipamento possui faixas de operação para as grandezas monitoradas, e três serviços registram, respectivamente, as leituras dos sensores, os alarmes e as OS de manutenção.
+O mini-mundo adotado, ilustrado na Figura \ref{fig:minimundo-plantabot}, tem oito equipamentos em quatro setores (duas bombas, três compressores, dois motores e uma caldeira), cada um com faixas de operação para as grandezas monitoradas. Três serviços registram as leituras dos sensores, os alarmes e as OS de manutenção.
 
-\begin{figure}[htbp]
+\begin{figure}[!ht]
 \centering
 \includegraphics[width=0.7\textwidth]{capitulos/plantabot/minimundo.png}
 \caption{Mini-mundo da planta industrial}
 \label{fig:minimundo-plantabot}
 \end{figure}
 
-\section{Arquitetura do PlantaBot}
+\section*{Arquitetura do PlantaBot}
 
-A Figura \ref{fig:arquitetura-plantabot} exibe a arquitetura do PlantaBot. O usuário conversa com o especialista por meio de um chat, no terminal ou em uma interface web, e cada pergunta é enviada a um LLM executado localmente pelo \textit{Ollama}. Um \textit{prompt} atribui ao modelo a persona de um perito em supervisão industrial, carrega a base de conhecimento (vinte pares de pergunta e resposta sobre os equipamentos, seus \textit{setpoints}, a classificação dos alarmes e os tipos de manutenção) e instrui o modelo a recusar perguntas alheias ao domínio.
+A Figura \ref{fig:arquitetura-plantabot} exibe a arquitetura do PlantaBot. O usuário conversa com o especialista por um chat, no terminal ou na interface web, e cada pergunta vai para um LLM executado localmente pelo \textit{Ollama}. O \textit{prompt} dá ao modelo a persona de um perito em supervisão industrial, carrega a base de conhecimento (vinte pares de pergunta e resposta sobre os equipamentos, seus \textit{setpoints}, a classificação dos alarmes e os tipos de manutenção) e manda recusar perguntas fora do domínio.
 
-A memória de trabalho combina (i) um cache semântico, que recupera a resposta dada a uma pergunta anterior de mesmo sentido, e (ii) o histórico das últimas mensagens da sessão, enviado ao LLM junto com cada nova pergunta.
+A memória de trabalho reúne um cache semântico, que devolve a resposta já dada a uma pergunta de mesmo sentido, e o histórico das últimas mensagens da sessão, enviado ao LLM com cada nova pergunta.
 
-\begin{figure}[htbp]
+\begin{figure}[!ht]
 \centering
 \includegraphics[width=0.8\textwidth]{capitulos/plantabot/arquitetura.png}
 \caption{Arquitetura do PlantaBot}
 \label{fig:arquitetura-plantabot}
 \end{figure}
 
-\section{Ferramentas MCP}
+\section*{Ferramentas MCP}
 
-A base de conhecimento descreve como a planta deve operar, mas não informa o seu estado atual. Para isso, o PlantaBot utiliza ferramentas disponibilizadas por meio do \textit{Model Context Protocol} (MCP), que padroniza a descoberta e a invocação de capacidades externas por aplicações com LLM \cite{mcp2026architecture}. As dez ferramentas são expostas por um único servidor MCP, ao qual o chat se conecta ao iniciar, recebendo a lista de ferramentas que repassa ao modelo:
+A base de conhecimento diz como a planta deve operar, mas não qual é o seu estado atual. Para isso o PlantaBot usa ferramentas do \textit{Model Context Protocol} (MCP), protocolo que padroniza a descoberta e a chamada de recursos externos por aplicações com LLM \cite{mcp2026architecture}. Um único servidor MCP expõe dez ferramentas; ao iniciar, o chat se conecta a ele e repassa a lista ao modelo:
 
 \begin{itemize}
     \item \textbf{Sensores:} \path{leituras_por_equipamento}, \path{leituras_por_grandeza} e \path{ultima_leitura} retornam as medições e os respectivos \textit{setpoints};
@@ -41,30 +42,30 @@ A base de conhecimento descreve como a planta deve operar, mas não informa o se
     \item \textbf{Diagnóstico:} \path{diagnosticar_equipamento} reúne, em uma única chamada, os desvios de \textit{setpoint}, os alarmes ativos e as OS pendentes de um equipamento.
 \end{itemize}
 
-As ferramentas consultam os três serviços da planta, implementados como serviços REST com bancos de dados próprios. Quando esses serviços estão desligados, elas devolvem dados simulados, identificados no campo \texttt{fonte} do resultado, e o chat avisa o usuário de que os dados não são reais.
+As ferramentas consultam os três serviços da planta, que são APIs REST com bancos de dados próprios. Se os serviços estiverem desligados, elas devolvem dados simulados, marcados no campo \texttt{fonte} do resultado, e o chat avisa o usuário.
 
-\section{Desenvolvimento e Avaliação}
+\section*{Desenvolvimento e Avaliação}
 
-O PlantaBot foi desenvolvido em Python. A biblioteca \textit{openai} envia as mensagens ao \textit{Ollama}, que executa o modelo \texttt{qwen3:4b}. A \textit{sentence-transformers} converte cada pergunta em um \textit{embedding}, e o \textit{chromadb} armazena esses vetores; uma resposta é recuperada do cache quando a distância de cosseno entre a nova pergunta e uma pergunta anterior é de até $0{,}20$. O servidor MCP é implementado com o \texttt{FastMCP}. Respostas obtidas com ferramentas não são gravadas no cache, porque refletem o estado da planta em um instante, assim como as recusas. A interface web é construída com o \textit{Chainlit}: a resposta é exibida à medida que é gerada, cada ferramenta acionada aparece como uma etapa que pode ser expandida e as leituras de sensores são apresentadas em gráficos.
+O PlantaBot foi escrito em Python. A biblioteca \textit{openai} envia as mensagens ao \textit{Ollama}, que roda o modelo \texttt{qwen3:4b}. A \textit{sentence-transformers} gera o \textit{embedding} de cada pergunta e o \textit{chromadb} guarda esses vetores; a resposta sai do cache quando a distância de cosseno até uma pergunta anterior é de no máximo $0{,}20$. Recusas e respostas obtidas com ferramentas não entram no cache, pois estas dependem do estado da planta no momento. O servidor MCP usa o \texttt{FastMCP} e a interface web, o \textit{Chainlit}, que mostra a resposta enquanto é gerada, exibe cada ferramenta acionada como uma etapa expansível e plota as leituras dos sensores.
 
-A Figura \ref{fig:funcionamento-plantabot} mostra uma sessão de uso na interface web. À esquerda, o pedido das leituras do Compressor 3 aciona uma ferramenta; como os serviços estavam desligados, a interface avisa que os dados são simulados, e a resposta traz um gráfico com a faixa de operação e o valor lido de cada grandeza. À direita, aparecem uma resposta gerada pelo LLM, a mesma resposta recuperada do cache para uma pergunta reformulada e a recusa de uma pergunta fora do domínio.
+A Figura \ref{fig:funcionamento-plantabot} mostra uma sessão de uso na interface web. À esquerda, o pedido das leituras do Compressor 3 aciona uma ferramenta; com os serviços desligados, a interface avisa que os dados são simulados e mostra um gráfico com a faixa de operação e o valor lido de cada grandeza. À direita estão uma resposta gerada pelo LLM, a mesma resposta vinda do cache para uma pergunta reformulada e a recusa de uma pergunta fora do domínio.
 
-\begin{figure}[htbp]
+\begin{figure}[!ht]
 \centering
-\includegraphics[width=1.0\textwidth]{capitulos/plantabot/funcionamento.png}
+\includegraphics[width=0.8\textwidth]{capitulos/plantabot/funcionamento.png}
 \caption{Funcionamento do PlantaBot na interface web}
 \label{fig:funcionamento-plantabot}
 \end{figure}
 
-Para avaliar as respostas, aplica-se a técnica \textit{LLM-as-a-Judge} \cite{azevedo2026julgamento}. Um modelo do Google, o \texttt{gemini-3.5-flash-lite}, atua como julgador; por ser de outro fornecedor, ele reduz a dependência entre o julgamento e o assistente. O julgador recebe, como instrução de sistema, sua persona e um gabarito de quatro perguntas da base de conhecimento. Primeiro, três respostas deliberadamente erradas lhe são apresentadas, para verificar se ele as reprova; depois, são julgadas as respostas do PlantaBot às quatro perguntas. Na execução da Figura \ref{fig:julgamento-plantabot}, as três respostas erradas foram reprovadas e as quatro do assistente, aprovadas. A amostra é pequena e serve como verificação básica, não como medida de acurácia.
+As respostas são avaliadas com a técnica \textit{LLM-as-a-Judge} \cite{azevedo2026julgamento}. O julgador é o \texttt{gemini-3.5-flash-lite}, do Google; usar um modelo de outro fornecedor evita que o assistente avalie a si próprio. Ele recebe, como instrução de sistema, sua persona e um gabarito com quatro perguntas da base de conhecimento. Antes de julgar o PlantaBot, o julgador analisa três respostas propositalmente erradas, para confirmar que sabe reprová-las. Na execução da Figura \ref{fig:julgamento-plantabot}, as três respostas erradas foram reprovadas e as quatro do assistente, aprovadas. Com uma amostra tão pequena, o teste confere o funcionamento do julgamento, mas não mede a acurácia do sistema.
 
-\begin{figure}[htbp]
+\begin{figure}[!ht]
 \centering
 \includegraphics[width=1.0\textwidth]{capitulos/plantabot/julgamento.png}
 \caption{Julgamento do PlantaBot}
 \label{fig:julgamento-plantabot}
 \end{figure}
 
-\section{Reproducibilidade e Reuso}
+\section*{Reproducibilidade e Reuso}
 
 O código-fonte do PlantaBot pode ser consultado e (re)usado livremente através do link de acesso ao \href{https://github.com/sidgubert/supervisorio-especialista}{repositório do projeto}. Também se encontra disponibilizado no Zenodo um vídeo demonstrativo \href{https://zenodo.org/records/24356687}{neste link} (DOI \href{https://doi.org/10.5281/zenodo.24356687}{10.5281/zenodo.24356687}).
